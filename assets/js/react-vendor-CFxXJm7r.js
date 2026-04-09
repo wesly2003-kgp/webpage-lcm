@@ -1019,7 +1019,7 @@ function hd() {
             defaultChecked: void 0,
             defaultValue: void 0,
             value: void 0,
-            checked: n ? ? e._wrapperState.initialChecked
+            checked: n ?? e._wrapperState.initialChecked
         })
     }
 
@@ -4285,8 +4285,8 @@ Error generating stack: ` + u.message + `
         return {
             value: e,
             source: null,
-            stack: n ? ? null,
-            digest: t ? ? null
+            stack: n ?? null,
+            digest: t ?? null
         }
     }
 
@@ -6713,7 +6713,7 @@ Error generating stack: ` + u.message + `
     }
 
     function Ia(e, t, n, r, l, u, i, a, f) {
-        return e = zi(n, r, !0, e, l, u, i, a, f), e.context = Oa(null), n = e.current, r = De(), l = At(n), u = xt(r, l), u.callback = t ? ? null, Bt(n, u, l), e.current.lanes = l, Qn(e, l, r), We(e, r), e
+        return e = zi(n, r, !0, e, l, u, i, a, f), e.context = Oa(null), n = e.current, r = De(), l = At(n), u = xt(r, l), u.callback = t ?? null, Bt(n, u, l), e.current.lanes = l, Qn(e, l, r), We(e, r), e
     }
 
     function Ll(e, t, n, r) {
@@ -6975,7 +6975,7 @@ Error generating stack: ` + u.message + `
             l = !1,
             u = "",
             i = Da;
-        if (n != null && (n.unstable_strictMode === !0 && (l = !0), n.identifierPrefix !== void 0 && (u = n.identifierPrefix), n.onRecoverableError !== void 0 && (i = n.onRecoverableError)), t = Ia(t, null, e, 1, n ? ? null, l, !1, u, i), e[wt] = t.current, ur(e), r)
+        if (n != null && (n.unstable_strictMode === !0 && (l = !0), n.identifierPrefix !== void 0 && (u = n.identifierPrefix), n.onRecoverableError !== void 0 && (i = n.onRecoverableError)), t = Ia(t, null, e, 1, n ?? null, l, !1, u, i), e[wt] = t.current, ur(e), r)
             for (e = 0; e < r.length; e++) n = r[e], l = n._getVersion, l = l(n._source), t.mutableSourceEagerHydrationData == null ? t.mutableSourceEagerHydrationData = [n, l] : t.mutableSourceEagerHydrationData.push(n, l);
         return new Ol(t)
     }, Ae.render = function(e, t, n) {
