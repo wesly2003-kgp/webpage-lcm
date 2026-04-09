@@ -1,4 +1,4 @@
-/**
+/*
  * @license
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
@@ -91,10 +91,10 @@ const {
     useDefault: !1,
     hasChanged: ld
 };
-Symbol.metadata ? ? (Symbol.metadata = Symbol("metadata")), Ji.litPropertyMetadata ? ? (Ji.litPropertyMetadata = new WeakMap);
+Symbol.metadata ?? (Symbol.metadata = Symbol("metadata")), Ji.litPropertyMetadata ?? (Ji.litPropertyMetadata = new WeakMap);
 let Ss = class extends HTMLElement {
     static addInitializer(e) {
-        this._$Ei(), (this.l ? ? (this.l = [])).push(e)
+        this._$Ei(), (this.l ?? (this.l = [])).push(e)
     }
     static get observedAttributes() {
         return this.finalize(), this._$Eh && [...this._$Eh.keys()]
@@ -110,7 +110,7 @@ let Ss = class extends HTMLElement {
         const {
             get: i,
             set: s
-        } = Ib(this.prototype, e) ? ? {
+        } = Ib(this.prototype, e) ?? {
             get() {
                 return this[t]
             },
@@ -129,7 +129,7 @@ let Ss = class extends HTMLElement {
         }
     }
     static getPropertyOptions(e) {
-        return this.elementProperties.get(e) ? ? Xd
+        return this.elementProperties.get(e) ?? Xd
     }
     static _$Ei() {
         if (this.hasOwnProperty(Ua("elementProperties"))) return;
@@ -177,7 +177,7 @@ let Ss = class extends HTMLElement {
     }
     addController(e) {
         var t;
-        (this._$EO ? ? (this._$EO = new Set)).add(e), this.renderRoot !== void 0 && this.isConnected && ((t = e.hostConnected) == null || t.call(e))
+        (this._$EO ?? (this._$EO = new Set)).add(e), this.renderRoot !== void 0 && this.isConnected && ((t = e.hostConnected) == null || t.call(e))
     }
     removeController(e) {
         var t;
@@ -190,12 +190,12 @@ let Ss = class extends HTMLElement {
         e.size > 0 && (this._$Ep = e)
     }
     createRenderRoot() {
-        const e = this.shadowRoot ? ? this.attachShadow(this.constructor.shadowRootOptions);
+        const e = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
         return yb(e, this.constructor.elementStyles), e
     }
     connectedCallback() {
         var e;
-        this.renderRoot ? ? (this.renderRoot = this.createRenderRoot()), this.enableUpdating(!0), (e = this._$EO) == null || e.forEach(t => {
+        this.renderRoot ?? (this.renderRoot = this.createRenderRoot()), this.enableUpdating(!0), (e = this._$EO) == null || e.forEach(t => {
             var n;
             return (n = t.hostConnected) == null ? void 0 : n.call(t)
         })
@@ -231,7 +231,7 @@ let Ss = class extends HTMLElement {
                 } : ((s = o.converter) == null ? void 0 : s.fromAttribute) !== void 0 ? o.converter : Ic;
             this._$Em = i;
             const l = c.fromAttribute(t, o.type);
-            this[i] = l ? ? ((a = this._$Ej) == null ? void 0 : a.get(i)) ? ? l, this._$Em = null
+            this[i] = l ?? ((a = this._$Ej) == null ? void 0 : a.get(i)) ?? l, this._$Em = null
         }
     }
     requestUpdate(e, t, n) {
@@ -239,7 +239,7 @@ let Ss = class extends HTMLElement {
         if (e !== void 0) {
             const s = this.constructor,
                 a = this[e];
-            if (n ? ? (n = s.getPropertyOptions(e)), !((n.hasChanged ? ? ld)(a, t) || n.useDefault && n.reflect && a === ((i = this._$Ej) == null ? void 0 : i.get(e)) && !this.hasAttribute(s._$Eu(e, n)))) return;
+            if (n ?? (n = s.getPropertyOptions(e)), !((n.hasChanged ?? ld)(a, t) || n.useDefault && n.reflect && a === ((i = this._$Ej) == null ? void 0 : i.get(e)) && !this.hasAttribute(s._$Eu(e, n)))) return;
             this.C(e, t, n)
         }
         this.isUpdatePending === !1 && (this._$ES = this._$EP())
@@ -249,7 +249,7 @@ let Ss = class extends HTMLElement {
         reflect: i,
         wrapped: s
     }, a) {
-        n && !(this._$Ej ? ? (this._$Ej = new Map)).has(e) && (this._$Ej.set(e, a ? ? t ? ? this[e]), s !== !0 || a !== void 0) || (this._$AL.has(e) || (this.hasUpdated || n || (t = void 0), this._$AL.set(e, t)), i === !0 && this._$Em !== e && (this._$Eq ? ? (this._$Eq = new Set)).add(e))
+        n && !(this._$Ej ?? (this._$Ej = new Map)).has(e) && (this._$Ej.set(e, a ?? t ?? this[e]), s !== !0 || a !== void 0) || (this._$AL.has(e) || (this.hasUpdated || n || (t = void 0), this._$AL.set(e, t)), i === !0 && this._$Em !== e && (this._$Eq ?? (this._$Eq = new Set)).add(e))
     }
     async _$EP() {
         this.isUpdatePending = !0;
@@ -268,7 +268,7 @@ let Ss = class extends HTMLElement {
         var n;
         if (!this.isUpdatePending) return;
         if (!this.hasUpdated) {
-            if (this.renderRoot ? ? (this.renderRoot = this.createRenderRoot()), this._$Ep) {
+            if (this.renderRoot ?? (this.renderRoot = this.createRenderRoot()), this._$Ep) {
                 for (const [s, a] of this._$Ep) this[s] = a;
                 this._$Ep = void 0
             }
@@ -323,7 +323,7 @@ Ss.elementStyles = [], Ss.shadowRootOptions = {
     mode: "open"
 }, Ss[Ua("elementProperties")] = new Map, Ss[Ua("finalized")] = new Map, ll == null || ll({
     ReactiveElement: Ss
-}), (Ji.reactiveElementVersions ? ? (Ji.reactiveElementVersions = [])).push("2.1.1");
+}), (Ji.reactiveElementVersions ?? (Ji.reactiveElementVersions = [])).push("2.1.1");
 /**
  * @license
  * Copyright 2017 Google LLC
@@ -18399,7 +18399,7 @@ const OC = (r, e) => {
         const c = r[o];
         let l, h, u = -1,
             d = 0;
-        for (; d < c.length && (a.lastIndex = d, h = a.exec(c), h !== null);) d = a.lastIndex, a === ca ? h[1] === "!--" ? a = fA : h[1] !== void 0 ? a = AA : h[2] !== void 0 ? (Zg.test(h[2]) && (i = RegExp("</" + h[2], "g")), a = hs) : h[3] !== void 0 && (a = hs) : a === hs ? h[0] === ">" ? (a = i ? ? ca, u = -1) : h[1] === void 0 ? u = -2 : (u = a.lastIndex - h[2].length, l = h[1], a = h[3] === void 0 ? hs : h[3] === '"' ? mA : pA) : a === mA || a === pA ? a = hs : a === fA || a === AA ? a = ca : (a = hs, i = void 0);
+        for (; d < c.length && (a.lastIndex = d, h = a.exec(c), h !== null);) d = a.lastIndex, a === ca ? h[1] === "!--" ? a = fA : h[1] !== void 0 ? a = AA : h[2] !== void 0 ? (Zg.test(h[2]) && (i = RegExp("</" + h[2], "g")), a = hs) : h[3] !== void 0 && (a = hs) : a === hs ? h[0] === ">" ? (a = i ?? ca, u = -1) : h[1] === void 0 ? u = -2 : (u = a.lastIndex - h[2].length, l = h[1], a = h[3] === void 0 ? hs : h[3] === '"' ? mA : pA) : a === mA || a === pA ? a = hs : a === fA || a === AA ? a = ca : (a = hs, i = void 0);
         const f = a === hs && r[o + 1].startsWith("/>") ? " " : "";
         s += a === ca ? c + PC : u >= 0 ? (n.push(l), c.slice(0, u) + Kg + c.slice(u) + Vi + f) : c + Vi + (u === -2 ? o : f)
     }
@@ -18480,7 +18480,7 @@ function qr(r, e, t = r, n) {
     if (e === Wr) return e;
     let i = n !== void 0 ? (a = t._$Co) == null ? void 0 : a[n] : t._$Cl;
     const s = eo(e) ? void 0 : e._$litDirective$;
-    return (i == null ? void 0 : i.constructor) !== s && ((o = i == null ? void 0 : i._$AO) == null || o.call(i, !1), s === void 0 ? i = void 0 : (i = new s(r), i._$AT(r, t, n)), n !== void 0 ? (t._$Co ? ? (t._$Co = []))[n] = i : t._$Cl = i), i !== void 0 && (e = qr(r, i._$AS(r, e.values), i, n)), e
+    return (i == null ? void 0 : i.constructor) !== s && ((o = i == null ? void 0 : i._$AO) == null || o.call(i, !1), s === void 0 ? i = void 0 : (i = new s(r), i._$AT(r, t, n)), n !== void 0 ? (t._$Co ?? (t._$Co = []))[n] = i : t._$Cl = i), i !== void 0 && (e = qr(r, i._$AS(r, e.values), i, n)), e
 }
 class kC {
     constructor(e, t) {
@@ -18498,7 +18498,7 @@ class kC {
                 content: t
             },
             parts: n
-        } = this._$AD, i = ((e == null ? void 0 : e.creationScope) ? ? Ps).importNode(t, !0);
+        } = this._$AD, i = ((e == null ? void 0 : e.creationScope) ?? Ps).importNode(t, !0);
         ws.currentNode = i;
         let s = ws.nextNode(),
             a = 0,
@@ -18521,10 +18521,10 @@ class kC {
 let Rd = class t0 {
     get _$AU() {
         var e;
-        return ((e = this._$AM) == null ? void 0 : e._$AU) ? ? this._$Cv
+        return ((e = this._$AM) == null ? void 0 : e._$AU) ?? this._$Cv
     }
     constructor(e, t, n, i) {
-        this.type = 2, this._$AH = Qt, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = i, this._$Cv = (i == null ? void 0 : i.isConnected) ? ? !0
+        this.type = 2, this._$AH = Qt, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = i, this._$Cv = (i == null ? void 0 : i.isConnected) ?? !0
     }
     get parentNode() {
         let e = this._$AA.parentNode;
@@ -18602,12 +18602,12 @@ class il {
         else {
             const o = e;
             let c, l;
-            for (e = s[0], c = 0; c < s.length - 1; c++) l = qr(this, o[n + c], t, c), l === Wr && (l = this._$AH[c]), a || (a = !eo(l) || l !== this._$AH[c]), l === Qt ? e = Qt : e !== Qt && (e += (l ? ? "") + s[c + 1]), this._$AH[c] = l
+            for (e = s[0], c = 0; c < s.length - 1; c++) l = qr(this, o[n + c], t, c), l === Wr && (l = this._$AH[c]), a || (a = !eo(l) || l !== this._$AH[c]), l === Qt ? e = Qt : e !== Qt && (e += (l ?? "") + s[c + 1]), this._$AH[c] = l
         }
         a && !i && this.j(e)
     }
     j(e) {
-        e === Qt ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ? ? "")
+        e === Qt ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "")
     }
 }
 class QC extends il {
@@ -18631,7 +18631,7 @@ class HC extends il {
         super(e, t, n, i, s), this.type = 5
     }
     _$AI(e, t = this) {
-        if ((e = qr(this, e, t, 0) ? ? Qt) === Wr) return;
+        if ((e = qr(this, e, t, 0) ?? Qt) === Wr) return;
         const n = this._$AH,
             i = e === Qt && n !== Qt || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive,
             s = e !== Qt && (n === Qt || i);
@@ -18639,7 +18639,7 @@ class HC extends il {
     }
     handleEvent(e) {
         var t;
-        typeof this._$AH == "function" ? this._$AH.call(((t = this.options) == null ? void 0 : t.host) ? ? this.element, e) : this._$AH.handleEvent(e)
+        typeof this._$AH == "function" ? this._$AH.call(((t = this.options) == null ? void 0 : t.host) ?? this.element, e) : this._$AH.handleEvent(e)
     }
 }
 class zC {
@@ -18654,13 +18654,13 @@ class zC {
     }
 }
 const Vl = za.litHtmlPolyfillSupport;
-Vl == null || Vl(to, Rd), (za.litHtmlVersions ? ? (za.litHtmlVersions = [])).push("3.3.1");
+Vl == null || Vl(to, Rd), (za.litHtmlVersions ?? (za.litHtmlVersions = [])).push("3.3.1");
 const n0 = (r, e, t) => {
-    const n = (t == null ? void 0 : t.renderBefore) ? ? e;
+    const n = (t == null ? void 0 : t.renderBefore) ?? e;
     let i = n._$litPart$;
     if (i === void 0) {
-        const s = (t == null ? void 0 : t.renderBefore) ? ? null;
-        n._$litPart$ = i = new Rd(e.insertBefore(Za(), s), s, void 0, t ? ? {})
+        const s = (t == null ? void 0 : t.renderBefore) ?? null;
+        n._$litPart$ = i = new Rd(e.insertBefore(Za(), s), s, void 0, t ?? {})
     }
     return i._$AI(r), i
 };
@@ -18679,7 +18679,7 @@ let _c = class extends Ss {
     createRenderRoot() {
         var t;
         const e = super.createRenderRoot();
-        return (t = this.renderOptions).renderBefore ? ? (t.renderBefore = e.firstChild), e
+        return (t = this.renderOptions).renderBefore ?? (t.renderBefore = e.firstChild), e
     }
     update(e) {
         const t = this.render();
@@ -18705,7 +18705,7 @@ const Wl = Rs.litElementPolyfillSupport;
 Wl == null || Wl({
     LitElement: _c
 });
-(Rs.litElementVersions ? ? (Rs.litElementVersions = [])).push("4.2.1");
+(Rs.litElementVersions ?? (Rs.litElementVersions = [])).push("4.2.1");
 /* @license
  * Copyright 2019 Google LLC. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the 'License');
@@ -28494,7 +28494,7 @@ class mT {
             }
             return !1
         });
-        return n ? ? null
+        return n ?? null
     }[Ju](e) {
         return this[tc].find(t => t instanceof Rh && t.mesh === e.object)
     }[nb](e) {
@@ -29588,8 +29588,8 @@ class IT extends Fs {
             const l = {
                 "@context": "http://schema.org/",
                 "@type": "3DModel",
-                image: a ? ? void 0,
-                name: s ? ? void 0,
+                image: a ?? void 0,
+                name: s ?? void 0,
                 encoding: c
             };
             n.textContent = JSON.stringify(l), document.head.appendChild(n)
