@@ -2666,7 +2666,7 @@ class hn extends Li {
         } = this.options;
         this.driver || (this.driver = e(o => this.tick(o))), n && n();
         const i = this.driver.now();
-        this.holdTime !== null ? this.startTime = i - this.holdTime : this.startTime ? this.state === "finished" && (this.startTime = i) : this.startTime = s ? ? this.calcStartTime(), this.state === "finished" && this.updateFinishedPromise(), this.cancelTime = this.startTime, this.holdTime = null, this.state = "running", this.driver.start()
+        this.holdTime !== null ? this.startTime = i - this.holdTime : this.startTime ? this.state === "finished" && (this.startTime = i) : this.startTime = s ?? this.calcStartTime(), this.state === "finished" && this.updateFinishedPromise(), this.cancelTime = this.startTime, this.holdTime = null, this.state = "running", this.driver.start()
     }
     pause() {
         var e;
@@ -2798,7 +2798,7 @@ class Un extends Li {
             times: i,
             ease: o
         });
-        return c.startTime = u ? ? this.calcStartTime(), this.pendingTimeline ? (wn(c, this.pendingTimeline), this.pendingTimeline = void 0) : c.onfinish = () => {
+        return c.startTime = u ?? this.calcStartTime(), this.pendingTimeline ? (wn(c, this.pendingTimeline), this.pendingTimeline = void 0) : c.onfinish = () => {
             const {
                 onComplete: h
             } = this.options;
@@ -3269,7 +3269,7 @@ function el(t) {
             f.forEach(g => {
                 const T = t.getBaseTarget(g),
                     P = t.getValue(g);
-                P && (P.liveStyle = !0), y[g] = T ? ? null
+                P && (P.liveStyle = !0), y[g] = T ?? null
             }), h.push({
                 animation: y
             })
