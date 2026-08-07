@@ -43,7 +43,7 @@ const W = 400,
         }
     }, {
         name: "Chethan Ashray C",
-        role: "COO",
+        role: "CO-Founder & COO",
         background: "As COO, I streamline operations at LCM to ensure seamless delivery of innovative EV charging solutions.",
         image: it,
         social: {
