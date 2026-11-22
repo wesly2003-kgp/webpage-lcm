@@ -140,7 +140,7 @@
       cacheRemove: function (k) { delete cache[k]; },
       sendOtp: function () {}, notifyAdmins: function () {},
       saveFile: function () { return { id: 'preview', url: '' }; },
-      folderUrl: function () { return ''; }
+      folderUrl: function () { return 'https://drive.google.com/drive/folders/18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i'; }
     };
     function seed() {
       var now = Date.now();
@@ -641,7 +641,7 @@
             (st ? '<div class="row small" style="margin-top:6px">' + st + '</div>' : '') + (r.text && r.text !== 'Status changed' ? '<div class="body">' + esc(r.text) + '</div>' : '') + '</li>';
         }).join('') + '</ul>' : '<div class="empty">No updates yet</div>');
     } else if (tab === 'files') {
-      html += (canEdit ? '<div class="dropzone" id="dz">' + icon('upload', 26) + '<div style="margin-top:8px"><b>Drop files here</b> or click to choose</div><div class="small dim">Saved straight to the company Google Drive · max 25 MB each</div><input type="file" id="fileIn" multiple hidden></div><div id="upStatus" class="small muted" style="margin:8px 0"></div>' : '') +
+      html += (canEdit ? '<div class="dropzone" id="dz">' + icon('upload', 26) + '<div style="margin-top:8px"><b>Drop files here</b> or click to choose</div><div class="small dim">Saved to LCM - WORK / Department / Task in Google Drive · max 25 MB each</div><input type="file" id="fileIn" multiple hidden></div><div id="upStatus" class="small muted" style="margin:8px 0"></div>' : '') +
         (files.length ? files.map(fileRow).join('') : '<div class="empty">No files yet</div>');
     } else {
       html += (canEdit && !isAdmin() ? '<form id="propForm" class="card" style="margin-bottom:18px"><h3 style="margin-bottom:6px">Suggest another way to do this</h3><p class="small muted" style="margin:0 0 12px">Your admin reviews it. Once approved, it becomes the task\'s official method.</p>' +
@@ -683,7 +683,7 @@
   }
   function fileRow(f) {
     return '<div class="file-row">' + icon('files', 18) + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name) + ' <span class="tag">preview — not on Drive</span>') + '</div>' +
-      '<div class="small dim">' + fmtSize(f.size) + ' · ' + esc(nameOf(f.uploader)) + ' · ' + ago(f.createdAt) + '</div></div></div>';
+      '<div class="small dim">' + fmtSize(f.size) + ' · ' + esc(nameOf(f.uploader)) + ' · ' + ago(f.createdAt) + (f.folder ? ' · 📁 ' + esc(f.folder) : '') + '</div></div></div>';
   }
   function setupDropzone(dz, input, status, taskId) {
     dz.onclick = function () { input.click(); };
@@ -797,7 +797,7 @@
     modal('<h3>' + (isNew ? 'Add team member' : 'Edit ' + esc(u.name)) + '</h3><form id="uf">' +
       '<label class="field"><span>Email *</span><input class="input" type="email" name="email" required value="' + esc(u.email || '') + '"' + (isNew ? '' : ' readonly') + '></label>' +
       '<div class="grid2"><label class="field"><span>Full name</span><input class="input" name="name" value="' + esc(u.name || '') + '"></label>' +
-      '<label class="field"><span>Department</span><input class="input" name="department" value="' + esc(u.department || '') + '"></label>' +
+      '<label class="field"><span>Department (Drive sub-folder)</span><input class="input" name="department" list="depts" placeholder="e.g. Electronics" value="' + esc(u.department || '') + '"><datalist id="depts">' + (S.data.departments || []).map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></label>' +
       '<label class="field"><span>Role</span><select class="input" name="role"><option value="employee">Employee</option><option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>Admin</option></select></label>' +
       '<label class="field"><span>Access</span><select class="input" name="active"><option value="true">Active — can sign in</option><option value="false"' + (u.active ? '' : ' selected') + '>Disabled</option></select></label></div>' +
       '<div class="row"><span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div></form>', function (m) {
@@ -813,13 +813,13 @@
     var taskName = function (id) { var t = d.tasks.filter(function (x) { return x.id === id; })[0]; return t ? t.title : 'General'; };
     c.innerHTML = '<div class="grid g-2"><div class="card"><h3>Upload to Google Drive</h3>' +
       '<label class="field"><span>Attach to task</span><select class="input" id="upTask"><option value="">General (no task)</option>' + d.tasks.map(function (t) { return '<option value="' + t.id + '">' + esc(t.title) + '</option>'; }).join('') + '</select></label>' +
-      '<div class="dropzone" id="dz">' + icon('upload', 26) + '<div style="margin-top:8px"><b>Drop files here</b> or click to choose</div><div class="small dim">Each task gets its own sub-folder in Drive · max 25 MB</div><input type="file" id="fileIn" multiple hidden></div><div id="upStatus" class="small muted" style="margin-top:8px"></div></div>' +
+      '<div class="dropzone" id="dz">' + icon('upload', 26) + '<div style="margin-top:8px"><b>Drop files here</b> or click to choose</div><div class="small dim">Saved to LCM - WORK / Department / Task · max 25 MB</div><input type="file" id="fileIn" multiple hidden></div><div id="upStatus" class="small muted" style="margin-top:8px"></div></div>' +
       '<div class="card"><h3>Storage</h3><div class="kpi" style="--accent:#0077ff;border:0;padding:0 0 0 14px;margin-bottom:12px"><div class="label">Files uploaded</div><div class="value">' + files.length + '</div><div class="sub">' + fmtSize(files.reduce(function (s, f) { return s + (+f.size || 0); }, 0)) + ' total</div></div>' +
-      (d.uploadsFolderUrl ? '<a class="btn sm" href="' + esc(d.uploadsFolderUrl) + '" target="_blank" rel="noopener">' + icon('files', 15) + ' Open Drive folder</a>' : '<p class="small muted">' + (PREVIEW ? 'In preview mode files are not sent to Drive.' : 'Uploads go to the Drive folder set as DRIVE_FOLDER_ID in the backend.') + '</p>') + '</div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>File</th><th>Task</th><th>Uploaded by</th><th>Size</th><th>When</th></tr></thead><tbody>' +
+      (d.uploadsFolderUrl ? '<a class="btn sm" href="' + esc(d.uploadsFolderUrl) + '" target="_blank" rel="noopener">' + icon('files', 15) + ' Open Drive folder</a>' : '<p class="small muted">' + (PREVIEW ? 'In preview mode files are not sent to Drive.' : 'Uploads go to the LCM - WORK Drive folder, sorted into department sub-folders.') + '</p>') + '</div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>File</th><th>Task</th><th>Drive folder</th><th>Uploaded by</th><th>Size</th><th>When</th></tr></thead><tbody>' +
       (files.length ? files.map(function (f) {
-        return '<tr><td>' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name)) + '</td><td>' + (f.taskId ? '<a href="#" data-task="' + esc(f.taskId) + '">' + esc(taskName(f.taskId)) + '</a>' : '<span class="dim">General</span>') + '</td><td><span class="row">' + avatar(f.uploader, true) + '<span class="small">' + esc(nameOf(f.uploader)) + '</span></span></td><td class="small dim">' + fmtSize(f.size) + '</td><td class="small dim nowrap">' + ago(f.createdAt) + '</td></tr>';
-      }).join('') : '<tr><td colspan="5" class="empty">No files yet</td></tr>') + '</tbody></table></div>';
+        return '<tr><td>' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name)) + '</td><td>' + (f.taskId ? '<a href="#" data-task="' + esc(f.taskId) + '">' + esc(taskName(f.taskId)) + '</a>' : '<span class="dim">General</span>') + '</td><td class="small dim">' + esc(f.folder || '—') + '</td><td><span class="row">' + avatar(f.uploader, true) + '<span class="small">' + esc(nameOf(f.uploader)) + '</span></span></td><td class="small dim">' + fmtSize(f.size) + '</td><td class="small dim nowrap">' + ago(f.createdAt) + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" class="empty">No files yet</td></tr>') + '</tbody></table></div>';
     bindCommon(c);
     var dz = $('#dz'); var sel = $('#upTask');
     setupDropzone(dz, $('#fileIn'), $('#upStatus'), function () { return sel.value; });

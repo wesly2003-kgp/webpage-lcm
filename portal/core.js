@@ -17,7 +17,7 @@ var LCM_TABLES = {
   Remarks: ['id', 'taskId', 'author', 'text', 'statusFrom', 'statusTo', 'progress', 'createdAt'],
   Proposals: ['id', 'taskId', 'author', 'title', 'approach', 'reason', 'status', 'adminNote',
     'reviewedBy', 'reviewedAt', 'createdAt'],
-  Files: ['id', 'taskId', 'name', 'url', 'driveId', 'mime', 'size', 'uploader', 'createdAt'],
+  Files: ['id', 'taskId', 'name', 'url', 'driveId', 'mime', 'size', 'uploader', 'department', 'folder', 'createdAt'],
   DailyLogs: ['id', 'date', 'author', 'summary', 'hours', 'blockers', 'createdAt'],
   Activity: ['id', 'actor', 'action', 'detail', 'taskId', 'createdAt'],
   Sessions: ['id', 'email', 'expiresAt', 'createdAt']
@@ -140,6 +140,7 @@ function LCMCore(db, svc) {
       activity: db.all('Activity').filter(function (a) {
         return user.role === 'admin' || lc(a.actor) === lc(user.email) || ids[a.taskId];
       }).slice(-300),
+      departments: users().map(function (u) { return u.department; }).filter(function (d, i, a) { return d && a.indexOf(d) === i; }).sort(),
       statuses: LCM_STATUSES,
       priorities: LCM_PRIORITIES,
       uploadsFolderUrl: user.role === 'admin' ? (svc.folderUrl ? svc.folderUrl() : '') : ''
@@ -263,11 +264,18 @@ function LCMCore(db, svc) {
     if (!name || !p.data) throw err('No file received');
     var size = Math.floor(String(p.data).length * 3 / 4);
     if (size > MAX_UPLOAD_BYTES) throw err('File is larger than 25 MB');
+    // Folder layout in Drive: <root> / <Department> / <Task title> / file
+    // Department = the task assignee's department (so a task's files stay together),
+    // falling back to the uploader's own department, then "General".
+    var owner = t && t.assignee ? findUser(t.assignee) : null;
+    var dept = str((owner && owner.department) || user.department, 80) || 'General';
+    var taskFolder = t ? t.title : 'General Uploads';
     var stored = svc.saveFile(name, str(p.mime, 120) || 'application/octet-stream', p.data, {
-      task: t ? t.title : 'General', uploader: user.email
+      department: dept, task: taskFolder, uploader: user.email
     });
     var f = { id: svc.uuid(), taskId: t ? t.id : '', name: name, url: stored.url, driveId: stored.id,
-      mime: str(p.mime, 120), size: size, uploader: user.email, createdAt: now() };
+      mime: str(p.mime, 120), size: size, uploader: user.email, department: dept,
+      folder: dept + ' / ' + taskFolder, createdAt: now() };
     db.insert('Files', f);
     log(user.email, 'upload', 'Uploaded ' + name + (t ? ' to "' + t.title + '"' : ''), t ? t.id : '');
     return f;

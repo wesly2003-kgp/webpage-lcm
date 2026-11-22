@@ -9,7 +9,7 @@ It goes live with a free Google Apps Script backend:
 |---|---|
 | Database (users, tasks, remarks, approvals, logs) | A Google Sheet you own |
 | Email OTP sign-in codes | Sent from your Gmail via Apps Script |
-| File uploads | Your Google Drive folder (one sub-folder per task) |
+| File uploads | Google Drive folder **LCM - WORK** → one sub-folder per department → one per task |
 
 ## 1. Create the backend (≈5 minutes)
 
@@ -19,8 +19,10 @@ It goes live with a free Google Apps Script backend:
 4. Click **+ → Script**, name it `Core`, and paste the contents of [`portal/core.js`](core.js).
 5. ⚙️ **Project Settings → Script properties → Add**:
    - `ADMIN_EMAILS` = the admin email(s), comma-separated, e.g. `wesleyj@…,anil@…`
-   - `DRIVE_FOLDER_ID` = the ID of the Drive folder uploads should go to
-     (the part after `/folders/` in the folder's link). Leave it out and the backend creates a folder called **LCM Portal Uploads**.
+   - *(optional)* `DRIVE_FOLDER_ID`: only if you want a folder other than **LCM - WORK**,
+     which is already built in (`18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i`).
+   - ⚠️ Do steps 1–7 while signed in to a Google account that has **Editor** access to LCM - WORK
+     (it is owned by eloopchargingsolutions@gmail.com; doing the setup from that account is simplest).
 6. Select the `setup` function → **Run** → allow the permissions (Sheets, Gmail send, Drive).
 7. **Deploy → New deployment → ⚙️ Web app**
    - Execute as: **Me**
@@ -43,8 +45,27 @@ Commit and push. GitHub Pages updates lcmev.com within a minute or two.
 ## 3. First sign-in
 
 1. Open lcmev.com/portal/ → **Admin** → enter an email listed in `ADMIN_EMAILS` → enter the emailed code.
-2. **Team → Add member** for each employee (email, name, department, role).
-   Only listed, active members can sign in.
+2. **Team → Add member** for each employee (email, name, **department**, role).
+   Only listed, active members can sign in. Type each department name exactly the same every time
+   (the form suggests existing ones), because it becomes the Drive folder name.
+
+## Where uploads go
+
+```
+LCM - WORK/
+├── Electronics/
+│   ├── MPPT controller PCB rev B/
+│   │   └── layout-v2.pdf
+│   └── General Uploads/
+├── Mechanical/
+│   └── Gearset torque test on bench/
+└── Management/
+```
+
+- Department folders and task folders are created automatically on the first upload.
+- The department comes from the **task's assignee**, so all of a task's files stay in one place even when an admin uploads them.
+  Files not attached to a task go under `<uploader's department>/General Uploads`.
+- Members with no department set go under `General/`.
 
 ## How it works
 
@@ -60,7 +81,7 @@ Commit and push. GitHub Pages updates lcmev.com within a minute or two.
 - Sees only their own tasks.
 - Changes status (Not Started → In Progress → Blocked → In Review → Completed) and sets progress %.
 - Posts remarks and development updates; each one is logged on the task timeline.
-- Uploads files straight to Drive (max 25 MB each).
+- Uploads files straight to Drive, into their department's folder (max 25 MB each).
 - **Method changes**: proposes another way to execute a task. The admins get an email and it waits for approval.
 - Submits a daily log (hours, work done, blockers).
 

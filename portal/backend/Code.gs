@@ -6,12 +6,16 @@
  *   2. Add two script files: "Core.gs" (paste portal/core.js) and "Code.gs" (paste this file).
  *   3. Project Settings → Script properties:
  *        ADMIN_EMAILS      = you@example.com,other-admin@example.com   (required)
- *        DRIVE_FOLDER_ID   = the id of the Drive folder uploads should go to (optional;
- *                            a folder "LCM Portal Uploads" is created if left empty)
+ *        DRIVE_FOLDER_ID   = (optional) overrides DEFAULT_DRIVE_FOLDER_ID below
  *   4. Run `setup` once from the editor and accept the permissions.
  *   5. Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone.
  *      Copy the /exec URL into portal/config.js (API_URL).
  */
+
+// "LCM - WORK" — https://drive.google.com/drive/folders/18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i
+// Uploads are saved as: LCM - WORK / <Department> / <Task> / <file>
+// The Google account that deploys this script must have Editor access to this folder.
+var DEFAULT_DRIVE_FOLDER_ID = '18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i';
 
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -139,8 +143,8 @@ function services_() {
       try { MailApp.sendEmail({ to: emails.join(','), subject: '[LCM Portal] ' + subject, body: body + '\n\nReview it at https://lcmev.com/portal/' }); } catch (e) {}
     },
     saveFile: function (name, mime, base64, meta) {
-      var folder = uploadsFolder_();
-      var sub = taskFolder_(folder, meta.task);
+      var deptFolder = subFolder_(uploadsFolder_(), meta.department || 'General');
+      var sub = subFolder_(deptFolder, meta.task || 'General Uploads');
       var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, name);
       var file = sub.createFile(blob);
       file.setDescription('Uploaded by ' + meta.uploader + ' via LCM Portal');
@@ -151,16 +155,13 @@ function services_() {
 }
 
 function uploadsFolder_() {
-  var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty('DRIVE_FOLDER_ID');
-  if (id) return DriveApp.getFolderById(id);
-  var f = DriveApp.createFolder('LCM Portal Uploads');
-  props.setProperty('DRIVE_FOLDER_ID', f.getId());
-  return f;
+  var id = PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID') || DEFAULT_DRIVE_FOLDER_ID;
+  return DriveApp.getFolderById(id);
 }
 
-function taskFolder_(parent, taskName) {
-  var name = String(taskName || 'General').replace(/[\\/:*?"<>|]/g, '_').slice(0, 100);
+// Finds or creates a child folder by name (used for department and task folders).
+function subFolder_(parent, name) {
+  name = String(name || 'General').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 100) || 'General';
   var it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
 }
