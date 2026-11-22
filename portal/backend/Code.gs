@@ -112,6 +112,8 @@ function services_() {
   return {
     adminEmails: (props.getProperty('ADMIN_EMAILS') ? String(props.getProperty('ADMIN_EMAILS')).split(',') : DEFAULT_ADMIN_EMAILS).map(function (s) { return String(s).trim(); }).filter(String),
     now: function () { return new Date().toISOString(); },
+    officeDate: function () { return Utilities.formatDate(new Date(), LCM_TIMEZONE, 'yyyy-MM-dd'); },
+    formatTime: function (iso) { return iso ? Utilities.formatDate(new Date(iso), LCM_TIMEZONE, 'hh:mm a') : ''; },
     uuid: function () { return Utilities.getUuid().replace(/-/g, ''); },
     random: function () { return Math.random(); },
     hash: function (s) {
@@ -139,11 +141,28 @@ function services_() {
       try { MailApp.sendEmail({ to: emails.join(','), subject: '[LCM Portal] ' + subject, body: body + '\n\nReview it at https://lcmev.com/portal/' }); } catch (e) {}
     },
     saveFile: function (name, mime, base64, meta) {
-      var deptFolder = subFolder_(uploadsFolder_(), meta.department || 'General');
-      var sub = subFolder_(deptFolder, meta.task || 'General Uploads');
+      var sub = folderPath_(meta.path || [meta.department || 'General', meta.task || 'General Uploads']);
       var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, name);
       var file = sub.createFile(blob);
       file.setDescription('Uploaded by ' + meta.uploader + ' via LCM Portal');
+      return { id: file.getId(), url: file.getUrl() };
+    },
+    // Writes the checkout report as a Google Doc into LCM - WORK / <Dept> / Daily Reports / <YYYY-MM>.
+    saveReport: function (r) {
+      var doc = DocumentApp.create(r.title);
+      var body = doc.getBody();
+      body.appendParagraph(r.heading).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      r.fields.forEach(function (f) {
+        var p = body.appendParagraph(f[0] + ': ' + f[1]);
+        p.editAsText().setBold(0, f[0].length, true);
+      });
+      r.sections.forEach(function (sec) {
+        body.appendParagraph(sec[0]).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        body.appendParagraph(sec[1]);
+      });
+      doc.saveAndClose();
+      var file = DriveApp.getFileById(doc.getId());
+      file.moveTo(folderPath_(r.path));
       return { id: file.getId(), url: file.getUrl() };
     },
     folderUrl: function () { return uploadsFolder_().getUrl(); }
@@ -153,6 +172,13 @@ function services_() {
 function uploadsFolder_() {
   var id = PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID') || DEFAULT_DRIVE_FOLDER_ID;
   return DriveApp.getFolderById(id);
+}
+
+// Walks/creates nested folders under LCM - WORK, e.g. ['Electronics', 'Daily Reports', '2026-11'].
+function folderPath_(parts) {
+  var f = uploadsFolder_();
+  parts.forEach(function (name) { f = subFolder_(f, name); });
+  return f;
 }
 
 // Finds or creates a child folder by name (used for department and task folders).

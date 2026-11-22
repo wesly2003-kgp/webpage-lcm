@@ -64,6 +64,13 @@ LCM - WORK/
   Files not attached to a task go under `<uploader's department>/General Uploads`.
 - Members with no department set go under `General/`.
 
+## Attendance & daily reports
+
+- Everyone sees **Check in** in the top bar. It marks them present, and the time comes from the server clock (India time), not their phone or PC.
+- **Check out** opens a short daily report: work done (required), tasks worked on, blockers, plan for tomorrow and optional files.
+  The report is saved as a Google Doc in `LCM - WORK / <Department> / Daily Reports / <YYYY-MM>/`, together with any attached files.
+- Admins: **Attendance** shows the daily register (entry, exit, hours, report), a monthly grid, CSV export and **Add / fix entry** for anyone who forgot to check in or out.
+
 ## How it works
 
 **Admin**

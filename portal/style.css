@@ -49,7 +49,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .input, select.input, textarea.input { width: 100%; background: #07080b; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; outline: none; transition: .15s; }
 .input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 119, 255, .2); }
 textarea.input { resize: vertical; min-height: 84px; }
-label.field { display: block; margin-bottom: 12px; }
+label.field, div.field { display: block; margin-bottom: 12px; }
 label.field > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 input[type=range] { width: 100%; accent-color: var(--primary); }
@@ -237,6 +237,31 @@ tbody tr.click:hover td { background: rgba(255, 255, 255, .02); }
 .proposal { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; background: var(--panel); }
 .proposal .approach { white-space: pre-wrap; margin: 8px 0; font-size: 14px; color: #d5d9e2; }
 
+/* ---------- Attendance ---------- */
+.att-today { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; gap: 20px; align-items: center; background: linear-gradient(135deg, rgba(0, 119, 255, .12), var(--panel) 60%); }
+.att-clock { font-family: Montserrat; font-size: 38px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.att-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.att-stats span { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.att-stats b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.att-action { text-align: center; }
+.btn.big { padding: 14px 22px; font-size: 15px; width: 100%; }
+.att-grid th, .att-grid td { padding: 6px 3px; text-align: center; border-bottom: 1px solid var(--line); }
+.att-grid th { font-size: 11px; letter-spacing: 0; text-transform: none; }
+.att-grid th div { font-size: 9px; color: var(--dim); }
+.att-grid th.sun { color: var(--dim); }
+.att-grid th.now { color: var(--primary-2); }
+.att-grid .sticky { position: sticky; left: 0; background: var(--panel); text-align: left; padding: 6px 12px; z-index: 1; min-width: 150px; }
+.att-grid thead .sticky { background: #08090d; }
+.att-cell { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: 10px; font-weight: 700; }
+.att-cell.p { background: #22c55e; color: #04220f; }
+.att-cell.nx { background: #f5a524; color: #2b1a00; }
+.att-cell.a { background: rgba(239, 68, 68, .35); }
+.att-cell.off { background: rgba(255, 255, 255, .05); }
+
+.check-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.check-list label { padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.check-list label:last-child { border-bottom: 0; }
+
 /* ---------- Toasts ---------- */
 #toasts { position: fixed; bottom: 20px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px; max-width: calc(100% - 40px); }
 .toast { background: #12151c; border: 1px solid var(--line-2); padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow); font-size: 14px; animation: fade .2s; max-width: 380px; }
@@ -254,7 +279,8 @@ tbody tr.click:hover td { background: rgba(255, 255, 255, .02); }
   .side { position: fixed; left: 0; top: 0; bottom: 0; width: 260px; z-index: 25; transform: translateX(-100%); transition: .2s; }
   .side.open { transform: none; box-shadow: var(--shadow); }
   .top .menu-btn { display: inline-flex; }
-  .top { padding: 12px 16px; }
+  .top { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
+  .top h2 { font-size: 17px; }
   .content { padding: 16px 16px 60px; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .g-3, .g-2, .g-2e { grid-template-columns: 1fr; }
@@ -264,4 +290,7 @@ tbody tr.click:hover td { background: rgba(255, 255, 255, .02); }
   .drawer-head, .drawer-body { padding-left: 16px; padding-right: 16px; }
   .login-card { padding: 24px; }
   .bar-row { grid-template-columns: 90px 1fr 36px; }
+  .att-today { grid-template-columns: 1fr; }
+  .att-stats { grid-template-columns: repeat(2, 1fr); }
+  .hide-sm { display: none; }
 }

@@ -112,6 +112,8 @@ function services_() {
   return {
     adminEmails: (props.getProperty('ADMIN_EMAILS') ? String(props.getProperty('ADMIN_EMAILS')).split(',') : DEFAULT_ADMIN_EMAILS).map(function (s) { return String(s).trim(); }).filter(String),
     now: function () { return new Date().toISOString(); },
+    officeDate: function () { return Utilities.formatDate(new Date(), LCM_TIMEZONE, 'yyyy-MM-dd'); },
+    formatTime: function (iso) { return iso ? Utilities.formatDate(new Date(iso), LCM_TIMEZONE, 'hh:mm a') : ''; },
     uuid: function () { return Utilities.getUuid().replace(/-/g, ''); },
     random: function () { return Math.random(); },
     hash: function (s) {
@@ -139,11 +141,28 @@ function services_() {
       try { MailApp.sendEmail({ to: emails.join(','), subject: '[LCM Portal] ' + subject, body: body + '\n\nReview it at https://lcmev.com/portal/' }); } catch (e) {}
     },
     saveFile: function (name, mime, base64, meta) {
-      var deptFolder = subFolder_(uploadsFolder_(), meta.department || 'General');
-      var sub = subFolder_(deptFolder, meta.task || 'General Uploads');
+      var sub = folderPath_(meta.path || [meta.department || 'General', meta.task || 'General Uploads']);
       var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, name);
       var file = sub.createFile(blob);
       file.setDescription('Uploaded by ' + meta.uploader + ' via LCM Portal');
+      return { id: file.getId(), url: file.getUrl() };
+    },
+    // Writes the checkout report as a Google Doc into LCM - WORK / <Dept> / Daily Reports / <YYYY-MM>.
+    saveReport: function (r) {
+      var doc = DocumentApp.create(r.title);
+      var body = doc.getBody();
+      body.appendParagraph(r.heading).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      r.fields.forEach(function (f) {
+        var p = body.appendParagraph(f[0] + ': ' + f[1]);
+        p.editAsText().setBold(0, f[0].length, true);
+      });
+      r.sections.forEach(function (sec) {
+        body.appendParagraph(sec[0]).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        body.appendParagraph(sec[1]);
+      });
+      doc.saveAndClose();
+      var file = DriveApp.getFileById(doc.getId());
+      file.moveTo(folderPath_(r.path));
       return { id: file.getId(), url: file.getUrl() };
     },
     folderUrl: function () { return uploadsFolder_().getUrl(); }
@@ -153,6 +172,13 @@ function services_() {
 function uploadsFolder_() {
   var id = PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID') || DEFAULT_DRIVE_FOLDER_ID;
   return DriveApp.getFolderById(id);
+}
+
+// Walks/creates nested folders under LCM - WORK, e.g. ['Electronics', 'Daily Reports', '2026-11'].
+function folderPath_(parts) {
+  var f = uploadsFolder_();
+  parts.forEach(function (name) { f = subFolder_(f, name); });
+  return f;
 }
 
 // Finds or creates a child folder by name (used for department and task folders).
@@ -186,11 +212,15 @@ var LCM_TABLES = {
   Files: ['id', 'taskId', 'name', 'url', 'driveId', 'mime', 'size', 'uploader', 'department', 'folder', 'createdAt'],
   DailyLogs: ['id', 'date', 'author', 'summary', 'hours', 'blockers', 'createdAt'],
   Activity: ['id', 'actor', 'action', 'detail', 'taskId', 'createdAt'],
+  Attendance: ['id', 'date', 'email', 'checkIn', 'checkOut', 'note', 'report', 'reportUrl', 'editedBy', 'createdAt'],
   Sessions: ['id', 'email', 'expiresAt', 'createdAt']
 };
 
 var LCM_STATUSES = ['Not Started', 'In Progress', 'Blocked', 'In Review', 'Completed'];
 var LCM_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
+// Office time zone for attendance dates and admin corrections (India Standard Time, no DST).
+var LCM_TIMEZONE = 'Asia/Kolkata';
+var LCM_TZ_OFFSET = '+05:30';
 
 function LCMCore(db, svc) {
   var OTP_TTL_SEC = 600;
@@ -303,6 +333,10 @@ function LCMCore(db, svc) {
       proposals: db.all('Proposals').filter(function (r) { return inScope(r) && mine(r); }),
       files: db.all('Files').filter(inScope),
       dailyLogs: db.all('DailyLogs').filter(mine),
+      attendance: db.all('Attendance').filter(function (r) { return user.role === 'admin' || lc(r.email) === lc(user.email); }),
+      serverNow: now(),
+      officeDate: officeDate(),
+      timezone: LCM_TIMEZONE,
       activity: db.all('Activity').filter(function (a) {
         return user.role === 'admin' || lc(a.actor) === lc(user.email) || ids[a.taskId];
       }).slice(-300),
@@ -426,6 +460,7 @@ function LCMCore(db, svc) {
   function uploadFile(user, p) {
     var t = p.taskId ? getTask(p.taskId) : null;
     if (t && !canSeeTask(user, t)) throw err('Not your task', 403);
+    var reportDate = p.report ? officeDate() : '';
     var name = str(p.name, 200).replace(/[\\/]/g, '_');
     if (!name || !p.data) throw err('No file received');
     var size = Math.floor(String(p.data).length * 3 / 4);
@@ -435,8 +470,10 @@ function LCMCore(db, svc) {
     // falling back to the uploader's own department, then "General".
     var owner = t && t.assignee ? findUser(t.assignee) : null;
     var dept = str((owner && owner.department) || user.department, 80) || 'General';
-    var taskFolder = t ? t.title : 'General Uploads';
+    if (reportDate) dept = str(user.department, 80) || 'General';
+    var taskFolder = reportDate ? 'Daily Reports / ' + reportDate.slice(0, 7) : (t ? t.title : 'General Uploads');
     var stored = svc.saveFile(name, str(p.mime, 120) || 'application/octet-stream', p.data, {
+      path: reportDate ? [dept, 'Daily Reports', reportDate.slice(0, 7)] : [dept, t ? t.title : 'General Uploads'],
       department: dept, task: taskFolder, uploader: user.email
     });
     var f = { id: svc.uuid(), taskId: t ? t.id : '', name: name, url: stored.url, driveId: stored.id,
@@ -445,6 +482,80 @@ function LCMCore(db, svc) {
     db.insert('Files', f);
     log(user.email, 'upload', 'Uploaded ' + name + (t ? ' to "' + t.title + '"' : ''), t ? t.id : '');
     return f;
+  }
+
+  // ---------- Attendance (server clock, office time zone) ----------
+  function officeDate() { return svc.officeDate ? svc.officeDate() : now().slice(0, 10); }
+  function todayRecord(email) {
+    var d = officeDate();
+    return db.all('Attendance').filter(function (r) { return r.date === d && lc(r.email) === lc(email); })[0] || null;
+  }
+  function checkIn(user, p) {
+    var rec = todayRecord(user.email);
+    if (rec) throw err('You already checked in today at ' + svc.formatTime(rec.checkIn));
+    rec = { id: svc.uuid(), date: officeDate(), email: user.email, checkIn: now(), checkOut: '', note: str(p.note, 300), editedBy: '', createdAt: now() };
+    db.insert('Attendance', rec);
+    log(user.email, 'check_in', 'Checked in — present at office (' + svc.formatTime(rec.checkIn) + ')');
+    return rec;
+  }
+  function checkOut(user, p) {
+    var rec = todayRecord(user.email);
+    if (!rec) throw err('Check in first');
+    if (rec.checkOut) throw err('You already checked out today at ' + svc.formatTime(rec.checkOut));
+    var report = str(p.report, 5000);
+    if (report.length < 5) throw err('Write a short report of what you did today before checking out');
+    var outAt = now();
+    var hours = Math.round((Date.parse(outAt) - Date.parse(rec.checkIn)) / 36e4) / 10;
+    var dept = str(user.department, 80) || 'General';
+    var taskLines = (Array.isArray(p.taskIds) ? p.taskIds : []).map(function (id) {
+      var t = db.all('Tasks').filter(function (x) { return x.id === id && lc(x.assignee) === lc(user.email); })[0];
+      return t ? t.title + ' — ' + t.status + ' (' + (num(t.progress, 0)) + '%)' : null;
+    }).filter(Boolean);
+    var files = (Array.isArray(p.files) ? p.files : []).slice(0, 20).map(function (f) { return str(f.name, 200) + ': ' + str(f.url, 500); });
+    var doc = { id: '', url: '' };
+    if (svc.saveReport) {
+      doc = svc.saveReport({
+        path: [dept, 'Daily Reports', rec.date.slice(0, 7)],
+        title: rec.date + ' — ' + user.name + ' — Daily Report',
+        heading: 'Daily Work Report',
+        fields: [['Name', user.name + ' (' + user.email + ')'], ['Department', dept], ['Date', rec.date],
+          ['Entry', svc.formatTime(rec.checkIn)], ['Exit', svc.formatTime(outAt)], ['Hours in office', String(hours)]],
+        sections: [['Work done today', report], ['Tasks worked on', taskLines.join('\n') || '—'],
+          ['Blockers / help needed', str(p.blockers, 2000) || 'None'], ['Plan for tomorrow', str(p.plan, 2000) || '—'],
+          ['Attachments', files.join('\n') || 'None']]
+      });
+    }
+    var out = db.update('Attendance', rec.id, { checkOut: outAt, report: report, reportUrl: doc.url || '' });
+    db.insert('DailyLogs', { id: svc.uuid(), date: rec.date, author: user.email, summary: report, hours: hours,
+      blockers: str(p.blockers, 1000), createdAt: outAt });
+    log(user.email, 'check_out', 'Checked out (' + svc.formatTime(outAt) + ') and submitted the daily report');
+    return out;
+  }
+  function toIso(date, hhmm) {
+    if (!hhmm) return '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(hhmm)) throw err('Use a valid date and HH:MM time');
+    return new Date(date + 'T' + hhmm + ':00' + LCM_TZ_OFFSET).toISOString();
+  }
+  // Admin correction: add or fix a member's entry/exit (e.g. forgot to check out).
+  function saveAttendance(user, p) {
+    requireAdmin(user);
+    var email = lc(p.email), date = str(p.date, 10);
+    if (!findUser(email)) throw err('Unknown member');
+    var inIso = toIso(date, str(p.checkIn, 5)), outIso = toIso(date, str(p.checkOut, 5));
+    if (!inIso) throw err('Entry time is required');
+    if (outIso && outIso <= inIso) throw err('Exit time must be after entry time');
+    var rec = db.all('Attendance').filter(function (r) { return r.date === date && lc(r.email) === email; })[0];
+    var patch = { checkIn: inIso, checkOut: outIso, note: str(p.note, 300), editedBy: user.email };
+    var saved = rec ? db.update('Attendance', rec.id, patch)
+      : db.insert('Attendance', Object.assign({ id: svc.uuid(), date: date, email: email, createdAt: now() }, patch));
+    log(user.email, 'attendance_edit', 'Set attendance for ' + email + ' on ' + date + ' (' + p.checkIn + '–' + (p.checkOut || '…') + ')');
+    return saved;
+  }
+  function deleteAttendance(user, p) {
+    requireAdmin(user);
+    db.remove('Attendance', str(p.id, 64));
+    log(user.email, 'attendance_edit', 'Removed an attendance entry');
+    return { ok: true };
   }
 
   function addDailyLog(user, p) {
@@ -480,7 +591,8 @@ function LCMCore(db, svc) {
   var authed = {
     bootstrap: bootstrap, logout: logout, createTask: createTask, updateTask: updateTask, deleteTask: deleteTask,
     addRemark: addRemark, createProposal: createProposal, reviewProposal: reviewProposal,
-    uploadFile: uploadFile, addDailyLog: addDailyLog, saveUser: saveUser
+    uploadFile: uploadFile, addDailyLog: addDailyLog, saveUser: saveUser,
+    checkIn: checkIn, checkOut: checkOut, saveAttendance: saveAttendance, deleteAttendance: deleteAttendance
   };
 
   return {

@@ -41,6 +41,15 @@
     var h = Math.round(m / 60); if (h < 24) return h + 'h ago';
     var d = Math.round(h / 24); return d < 30 ? d + 'd ago' : fmtDate(s);
   }
+  var TZ = 'Asia/Kolkata';
+  var skew = 0; // server clock minus this device's clock, in ms
+  function serverNow() { return new Date(Date.now() + skew); }
+  function officeDay(d) { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+  function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString('en-IN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: true }) : '—'; }
+  function hhmm(iso) { return iso ? new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : ''; }
+  function durH(a, b) { return a ? Math.max(0, ((b ? Date.parse(b) : serverNow().getTime()) - Date.parse(a)) / 36e5) : 0; }
+  function fmtDur(h) { var m = Math.round(h * 60); return Math.floor(m / 60) + 'h ' + ('0' + (m % 60)).slice(-2) + 'm'; }
+  function myToday() { var d = S.data.officeDate; return S.data.attendance.filter(function (r) { return r.date === d && r.email === S.data.me.email; })[0]; }
   function sKey(s) { return 's-' + String(s).replace(/\s/g, ''); }
   function pill(s) { return '<span class="pill ' + sKey(s) + '">' + esc(s) + '</span>'; }
   function prio(p) { return '<span class="prio p-' + esc(p) + '">' + esc(p) + '</span>'; }
@@ -75,6 +84,7 @@
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
     refresh: '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
     alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
   };
   function icon(n, size) { return '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[n] + '</svg>'; }
@@ -105,6 +115,9 @@
   }
   function refresh(silent) {
     return api('bootstrap').then(function (d) {
+      if (d.serverNow) skew = Date.parse(d.serverNow) - Date.now();
+      d.officeDate = officeDay(serverNow());
+      d.attendance = d.attendance || [];
       S.data = d;
       render();
     }).catch(function (e) { if (!silent) toast(e.message, 'err'); });
@@ -126,6 +139,7 @@
     function id() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
     function hash(s) { var h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16); }
     if (!mem) { mem = {}; Object.keys(LCM_TABLES).forEach(function (t) { mem[t] = []; }); seed(); save(); }
+    Object.keys(LCM_TABLES).forEach(function (t) { if (!mem[t]) mem[t] = []; });
     var db = {
       all: function (t) { return (mem[t] || []).map(function (r) { return Object.assign({}, r); }); },
       insert: function (t, o) { mem[t].push(Object.assign({}, o)); save(); return o; },
@@ -135,11 +149,14 @@
     var svc = {
       adminEmails: ['admin@lcmev.com'], exposeOtp: true,
       now: function () { return new Date().toISOString(); }, uuid: id, random: Math.random, hash: hash,
+      officeDate: function () { return officeDay(new Date()); },
+      formatTime: function (iso) { return fmtTime(iso); },
       cacheGet: function (k) { var c = cache[k]; return c && c.exp > Date.now() ? c.v : null; },
       cachePut: function (k, v, s) { cache[k] = { v: v, exp: Date.now() + s * 1000 }; },
       cacheRemove: function (k) { delete cache[k]; },
       sendOtp: function () {}, notifyAdmins: function () {},
       saveFile: function () { return { id: 'preview', url: '' }; },
+      saveReport: function () { return { id: 'preview', url: '' }; },
       folderUrl: function () { return 'https://drive.google.com/drive/folders/18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i'; }
     };
     function seed() {
@@ -273,6 +290,7 @@
     return [
       ['overview', 'Overview', 'overview'],
       ['tasks', a ? 'All Tasks' : 'My Tasks', 'tasks'],
+      ['attendance', 'Attendance', 'clock'],
       ['daily', 'Daily Works', 'daily'],
       ['approvals', a ? 'Approvals' : 'Method Changes', 'approvals', a ? pending : 0],
       a ? ['team', 'Team', 'team'] : null,
@@ -280,7 +298,7 @@
       ['activity', 'Activity', 'activity']
     ].filter(Boolean);
   }
-  var TITLES = { overview: 'Overview', tasks: 'Tasks', daily: 'Daily Works', approvals: 'Approvals', team: 'Team', files: 'Files', activity: 'Activity' };
+  var TITLES = { attendance: 'Attendance', overview: 'Overview', tasks: 'Tasks', daily: 'Daily Works', approvals: 'Approvals', team: 'Team', files: 'Files', activity: 'Activity' };
 
   function render() {
     if (!S.token) return renderLogin();
@@ -297,8 +315,9 @@
       '<button class="btn ghost sm" id="logout" title="Sign out">' + icon('logout', 16) + '</button></div></aside>' +
       '<div class="overlay hidden" id="sideOverlay" style="z-index:24"></div>' +
       '<main class="main"><div class="top"><button class="btn ghost sm menu-btn" id="menuBtn">' + icon('menu') + '</button><h2>' + TITLES[S.view] + '</h2><span class="spacer"></span>' +
+      attendanceButton() +
       '<button class="btn ghost sm" id="refreshBtn" title="Refresh">' + icon('refresh', 16) + '</button>' +
-      (isAdmin() ? '<button class="btn primary sm" id="newTaskBtn">' + icon('plus', 16) + ' New task</button>' : '') +
+      (isAdmin() ? '<button class="btn primary sm" id="newTaskBtn">' + icon('plus', 16) + '<span class="hide-sm">New task</span></button>' : '') +
       '</div><div class="content" id="content"></div></main></div>';
     $('#app').innerHTML = html;
     $$('.nav button[data-view]').forEach(function (b) { b.onclick = function () { S.view = b.dataset.view; store('lcm_view', S.view); closeSide(); render(); window.scrollTo(0, 0); }; });
@@ -307,8 +326,9 @@
     $('#menuBtn').onclick = function () { $('#side').classList.add('open'); $('#sideOverlay').classList.remove('hidden'); };
     $('#sideOverlay').onclick = closeSide;
     if ($('#newTaskBtn')) $('#newTaskBtn').onclick = function () { taskForm(); };
+    bindAttendanceButtons(document);
     var c = $('#content');
-    ({ overview: viewOverview, tasks: viewTasks, daily: viewDaily, approvals: viewApprovals, team: viewTeam, files: viewFiles, activity: viewActivity })[S.view](c);
+    ({ attendance: viewAttendance, overview: viewOverview, tasks: viewTasks, daily: viewDaily, approvals: viewApprovals, team: viewTeam, files: viewFiles, activity: viewActivity })[S.view](c);
     if (S.openTask) renderDrawer();
   }
   function closeSide() { var s = $('#side'); if (s) s.classList.remove('open'); var o = $('#sideOverlay'); if (o) o.classList.add('hidden'); }
@@ -417,7 +437,7 @@
     bindCommon(c);
   }
 
-  var ACT_ICON = { login: '🔑', task_created: '📝', task_assigned: '👤', status: '🔄', remark: '💬', proposal: '💡', proposal_approved: '✅', proposal_rejected: '❌', upload: '📎', daily_log: '🗓️', daily_work: '📌', user_added: '➕', user_updated: '✏️', task_deleted: '🗑️' };
+  var ACT_ICON = { check_in: '🟢', check_out: '🔴', attendance_edit: '🕒', login: '🔑', task_created: '📝', task_assigned: '👤', status: '🔄', remark: '💬', proposal: '💡', proposal_approved: '✅', proposal_rejected: '❌', upload: '📎', daily_log: '🗓️', daily_work: '📌', user_added: '➕', user_updated: '✏️', task_deleted: '🗑️' };
   function feed(items) {
     items = items.filter(function (a) { return a.action !== 'login'; });
     if (!items.length) return '<div class="empty">No activity yet</div>';
@@ -824,6 +844,177 @@
     var dz = $('#dz'); var sel = $('#upTask');
     setupDropzone(dz, $('#fileIn'), $('#upStatus'), function () { return sel.value; });
   }
+  // ---------- Attendance ----------
+  function attendanceButton() {
+    var r = myToday();
+    if (!r) return '<button class="btn success sm" data-checkin>' + icon('clock', 15) + '<span>Check in</span></button>';
+    if (!r.checkOut) return '<span class="small muted nowrap hide-sm">In since ' + fmtTime(r.checkIn) + '</span><button class="btn danger sm" data-checkout>' + icon('clock', 15) + '<span>Check out</span></button>';
+    return '<span class="small muted nowrap hide-sm">✓ ' + fmtTime(r.checkIn) + ' – ' + fmtTime(r.checkOut) + '</span>';
+  }
+  function bindAttendanceButtons(root) {
+    $$('[data-checkin]', root).forEach(function (b) { b.onclick = function () { b.disabled = true; act('checkIn', {}, 'Marked present ✓').catch(function () { b.disabled = false; }); }; });
+    $$('[data-checkout]', root).forEach(function (b) { b.onclick = checkoutForm; });
+    $$('[data-report]', root).forEach(function (b) { b.onclick = function () { showReport(b.dataset.report); }; });
+  }
+  function checkoutForm() {
+    var r = myToday(); if (!r) return;
+    var mine = S.data.tasks.filter(function (t) { return t.assignee === S.data.me.email && (t.status !== 'Completed' || (t.completedAt && localDay(t.completedAt) === S.data.officeDate)); });
+    modal('<h3>Check out · daily report</h3><p class="small muted" style="margin-top:-8px">In since <b>' + fmtTime(r.checkIn) + '</b> · ' + fmtDur(durH(r.checkIn, '')) + ' so far. Your report is saved to Google Drive (Daily Reports) and your admin can see it.</p><form id="cof">' +
+      '<label class="field"><span>What did you do today? *</span><textarea class="input" name="report" required minlength="5" style="min-height:110px" placeholder="Work completed, results, developments…"></textarea></label>' +
+      (mine.length ? '<div class="field"><span class="small muted" style="display:block;margin-bottom:6px">Tasks you worked on</span><div class="check-list">' + mine.map(function (t) {
+        return '<label class="row small"><input type="checkbox" name="task" value="' + t.id + '"> <span style="flex:1">' + esc(t.title) + '</span>' + pill(t.status) + '</label>'; }).join('') + '</div></div>' : '') +
+      '<label class="field"><span>Blockers / help needed</span><input class="input" name="blockers" placeholder="Optional"></label>' +
+      '<label class="field"><span>Plan for tomorrow</span><input class="input" name="plan" placeholder="Optional"></label>' +
+      '<label class="field"><span>Attach files (photos, results…) · saved with the report</span><input class="input" type="file" name="files" multiple></label>' +
+      '<div id="coStatus" class="small muted" style="margin-bottom:10px"></div>' +
+      '<div class="row"><span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button class="btn danger">Submit report &amp; check out</button></div></form>', function (m) {
+      var f = $('#cof', m), st = $('#coStatus', m);
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        var btn = f.querySelector('.btn.danger'); btn.disabled = true;
+        var list = Array.prototype.slice.call(f.files.files || []);
+        var big = list.filter(function (x) { return x.size > 25 * 1048576; });
+        if (big.length) { toast(big[0].name + ' is over 25 MB', 'err'); btn.disabled = false; return; }
+        var uploaded = [];
+        var chain = list.reduce(function (pr, file, i) {
+          return pr.then(function () {
+            st.textContent = 'Uploading ' + file.name + ' (' + (i + 1) + '/' + list.length + ')…';
+            return new Promise(function (res, rej) {
+              var rd = new FileReader();
+              rd.onload = function () { api('uploadFile', { report: true, name: file.name, mime: file.type, data: String(rd.result).split(',')[1] || '' }).then(function (x) { uploaded.push({ name: x.name, url: x.url }); res(); }).catch(rej); };
+              rd.onerror = rej; rd.readAsDataURL(file);
+            });
+          });
+        }, Promise.resolve());
+        chain.then(function () {
+          st.textContent = 'Saving report to Drive…';
+          return api('checkOut', { report: f.report.value, blockers: f.blockers.value, plan: f.plan.value, files: uploaded,
+            taskIds: $$('input[name=task]:checked', f).map(function (x) { return x.value; }) });
+        }).then(function () { closeModal(); toast('Checked out — report saved to Drive', 'ok'); return refresh(true); })
+          .catch(function (er) { toast(er.message, 'err'); st.textContent = ''; btn.disabled = false; });
+      };
+    });
+  }
+  function showReport(id) {
+    var r = S.data.attendance.filter(function (x) { return x.id === id; })[0]; if (!r) return;
+    modal('<h3>' + esc(nameOf(r.email)) + ' · ' + new Date(r.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + '</h3>' +
+      '<div class="row small muted" style="margin-top:-8px;margin-bottom:14px">' + fmtTime(r.checkIn) + ' – ' + fmtTime(r.checkOut) + ' · ' + fmtDur(durH(r.checkIn, r.checkOut)) + '</div>' +
+      '<div class="timeline"><div class="body" style="margin:0">' + esc(r.report || 'No report') + '</div></div>' +
+      '<div class="row" style="margin-top:16px">' + (r.reportUrl ? '<a class="btn sm" href="' + esc(r.reportUrl) + '" target="_blank" rel="noopener">' + icon('files', 15) + ' Open in Google Drive</a>' : '') + '<span class="spacer"></span><button class="btn" data-close>Close</button></div>');
+  }
+  function attStatus(r) {
+    if (!r) return '<span class="pill s-Rejected">Absent</span>';
+    if (!r.checkOut) return r.date === S.data.officeDate ? '<span class="pill s-InProgress">In office</span>' : '<span class="pill s-InReview">No exit</span>';
+    return '<span class="pill s-Completed">Present</span>';
+  }
+  function monthDays(ym) {
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7), n = new Date(y, m, 0).getDate(), out = [];
+    for (var i = 1; i <= n; i++) out.push(ym + '-' + ('0' + i).slice(-2));
+    return out;
+  }
+  function viewAttendance(c) {
+    var d = S.data, me = d.me, admin = isAdmin(), today = d.officeDate;
+    S.attDate = S.attDate || today; S.attMonth = S.attMonth || today.slice(0, 7);
+    var r = myToday();
+    var clock = '<div class="card att-today"><div><div class="small muted">Office time · India (IST)</div><div class="att-clock" id="attClock">' + fmtTime(serverNow().toISOString()) + '</div>' +
+      '<div class="muted">' + new Date(today + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</div></div>' +
+      '<div class="att-stats"><div><span>Entry</span><b>' + (r ? fmtTime(r.checkIn) : '—') + '</b></div><div><span>Exit</span><b>' + (r && r.checkOut ? fmtTime(r.checkOut) : '—') + '</b></div>' +
+      '<div><span>Hours</span><b id="attHours">' + (r ? fmtDur(durH(r.checkIn, r.checkOut)) : '—') + '</b></div><div><span>Status</span>' + attStatus(r) + '</div></div>' +
+      '<div class="att-action">' + (!r ? '<button class="btn success big" data-checkin>' + icon('clock', 18) + ' Check in — I\'m in the office</button>'
+        : !r.checkOut ? '<button class="btn danger big" data-checkout>' + icon('clock', 18) + ' Check out</button>'
+        : '<div class="muted small">Day complete ✓</div>') + '<div class="small dim" style="margin-top:6px">Time is taken from the server clock, not your device.</div></div></div>';
+
+    var html = clock;
+    var members = d.users.filter(function (u) { return u.active; });
+    if (admin) {
+      var day = d.attendance.filter(function (x) { return x.date === S.attDate; });
+      var byEmail = {}; day.forEach(function (x) { byEmail[x.email] = x; });
+      var present = day.length, inNow = day.filter(function (x) { return !x.checkOut && x.date === today; }).length;
+      var done = day.filter(function (x) { return x.checkOut; });
+      var avg = done.length ? done.reduce(function (s, x) { return s + durH(x.checkIn, x.checkOut); }, 0) / done.length : 0;
+      html += '<div class="toolbar" style="margin-top:18px"><h3 style="margin:0">Daily register</h3><input class="input" type="date" id="attDate" value="' + S.attDate + '" max="' + today + '">' +
+        '<button class="btn sm" id="attToday">Today</button><span class="spacer"></span><button class="btn sm" id="attAdd">' + icon('plus', 15) + ' Add / fix entry</button></div>' +
+        '<div class="kpis" style="grid-template-columns:repeat(5,minmax(0,1fr))">' + [
+          ['Present', present + ' / ' + members.length, '#22c55e'], ['In office now', inNow, '#0077ff'], ['Checked out', done.length, '#8b93a7'],
+          ['Absent', Math.max(0, members.length - present), '#ef4444'], ['Avg hours', done.length ? fmtDur(avg) : '—', '#f5a524']
+        ].map(function (k) { return '<div class="kpi" style="--accent:' + k[2] + '"><div class="label">' + k[0] + '</div><div class="value">' + k[1] + '</div></div>'; }).join('') + '</div>' +
+        '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Department</th><th>Entry</th><th>Exit</th><th>Hours</th><th>Status</th><th>Report</th><th></th></tr></thead><tbody>' +
+        members.map(function (u) {
+          var x = byEmail[u.email];
+          return '<tr><td><span class="row">' + avatar(u.email, true) + '<b>' + esc(u.name) + '</b></span></td><td class="small muted">' + esc(u.department || '—') + '</td>' +
+            '<td class="nowrap">' + (x ? fmtTime(x.checkIn) : '—') + '</td><td class="nowrap">' + (x && x.checkOut ? fmtTime(x.checkOut) : '—') + '</td>' +
+            '<td class="nowrap">' + (x ? fmtDur(durH(x.checkIn, x.checkOut || (x.date === today ? '' : x.checkIn))) : '—') + '</td><td>' + attStatus(x) +
+            (x && x.editedBy ? ' <span class="tag" title="Edited by ' + esc(nameOf(x.editedBy)) + '">edited</span>' : '') + '</td>' +
+            '<td>' + (x && x.report ? '<button class="btn sm" data-report="' + x.id + '">View</button>' : '<span class="dim">—</span>') + '</td>' +
+            '<td><button class="btn ghost sm" data-att-edit="' + esc(u.email) + '">Edit</button></td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    // Monthly register
+    var days = monthDays(S.attMonth);
+    var rows = admin ? members : [me];
+    var recs = {}; d.attendance.forEach(function (x) { if (x.date.slice(0, 7) === S.attMonth) recs[x.email + '|' + x.date] = x; });
+    html += '<div class="toolbar" style="margin-top:22px"><h3 style="margin:0">Monthly attendance</h3><input class="input" type="month" id="attMonth" value="' + S.attMonth + '" max="' + today.slice(0, 7) + '">' +
+      '<span class="spacer"></span><span class="legend" style="margin:0"><span><i style="background:#22c55e"></i>Present</span><span><i style="background:#f5a524"></i>No exit</span><span><i style="background:rgba(239,68,68,.35)"></i>Absent</span><span><i style="background:rgba(255,255,255,.05)"></i>Sunday / future</span></span>' +
+      '<button class="btn sm" id="attCsv">' + icon('download', 15) + ' CSV</button></div>' +
+      '<div class="table-wrap"><table class="att-grid"><thead><tr><th class="sticky">Member</th>' + days.map(function (x) {
+        var dt = new Date(x + 'T12:00:00'); return '<th class="' + (dt.getDay() === 0 ? 'sun' : '') + (x === today ? ' now' : '') + '">' + (+x.slice(8)) + '<div>' + 'SMTWTFS'[dt.getDay()] + '</div></th>';
+      }).join('') + '<th>Days</th><th>Hours</th></tr></thead><tbody>' +
+      rows.map(function (u) {
+        var cnt = 0, hrs = 0;
+        var cells = days.map(function (x) {
+          var rr = recs[u.email + '|' + x], sun = new Date(x + 'T12:00:00').getDay() === 0, future = x > today;
+          if (rr) { cnt++; var h = rr.checkOut ? durH(rr.checkIn, rr.checkOut) : 0; hrs += h;
+            return '<td><span class="att-cell ' + (rr.checkOut || x === today ? 'p' : 'nx') + '" title="' + esc(x + ': ' + fmtTime(rr.checkIn) + ' – ' + (rr.checkOut ? fmtTime(rr.checkOut) : 'no exit') + (h ? ' (' + fmtDur(h) + ')' : '')) + '">P</span></td>'; }
+          return '<td><span class="att-cell ' + (sun || future ? 'off' : (u.createdAt && x < String(u.createdAt).slice(0, 10) ? 'off' : 'a')) + '" title="' + x + '"></span></td>';
+        }).join('');
+        return '<tr><td class="sticky"><span class="row">' + avatar(u.email, true) + '<span class="small">' + esc(u.name) + '</span></span></td>' + cells + '<td><b>' + cnt + '</b></td><td class="nowrap small">' + fmtDur(hrs) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    if (!admin) {
+      var mine = d.attendance.filter(function (x) { return x.date.slice(0, 7) === S.attMonth; }).sort(function (p, q) { return p.date < q.date ? 1 : -1; });
+      html += '<div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Date</th><th>Entry</th><th>Exit</th><th>Hours</th><th>Status</th><th>Report</th></tr></thead><tbody>' +
+        (mine.length ? mine.map(function (x) { return '<tr><td class="nowrap">' + new Date(x.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) + '</td><td>' + fmtTime(x.checkIn) + '</td><td>' + (x.checkOut ? fmtTime(x.checkOut) : '—') + '</td><td>' + (x.checkOut ? fmtDur(durH(x.checkIn, x.checkOut)) : '—') + '</td><td>' + attStatus(x) + '</td><td>' + (x.report ? '<button class="btn sm" data-report="' + x.id + '">View</button>' : '—') + '</td></tr>'; }).join('')
+          : '<tr><td colspan="6" class="empty">No attendance this month</td></tr>') + '</tbody></table></div>';
+    }
+    c.innerHTML = html;
+    bindAttendanceButtons(c);
+    var tick = setInterval(function () {
+      var el = $('#attClock'); if (!el) return clearInterval(tick);
+      el.textContent = new Date(serverNow()).toLocaleTimeString('en-IN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      var rr = myToday(), hEl = $('#attHours'); if (rr && hEl && !rr.checkOut) hEl.textContent = fmtDur(durH(rr.checkIn, ''));
+    }, 1000);
+    if ($('#attDate')) $('#attDate').onchange = function () { S.attDate = this.value || today; render(); };
+    if ($('#attToday')) $('#attToday').onclick = function () { S.attDate = today; render(); };
+    $('#attMonth').onchange = function () { S.attMonth = this.value || today.slice(0, 7); render(); };
+    if ($('#attAdd')) $('#attAdd').onclick = function () { attendanceForm(); };
+    $$('[data-att-edit]', c).forEach(function (b) { b.onclick = function () { attendanceForm(b.dataset.attEdit, S.attDate); }; });
+    $('#attCsv').onclick = function () {
+      var out = [['Date', 'Name', 'Email', 'Department', 'Entry', 'Exit', 'Hours', 'Status', 'Edited by', 'Report', 'Report link']];
+      rows.forEach(function (u) { days.forEach(function (x) {
+        if (x > today) return;
+        var rr = recs[u.email + '|' + x];
+        out.push([x, u.name, u.email, u.department || '', rr ? fmtTime(rr.checkIn) : '', rr && rr.checkOut ? fmtTime(rr.checkOut) : '', rr && rr.checkOut ? durH(rr.checkIn, rr.checkOut).toFixed(2) : '',
+          rr ? (rr.checkOut ? 'Present' : 'No exit') : (new Date(x + 'T12:00:00').getDay() === 0 ? 'Sunday' : 'Absent'), rr && rr.editedBy ? rr.editedBy : '', rr ? rr.report || '' : '', rr ? rr.reportUrl || '' : '']);
+      }); });
+      var csv = out.map(function (r2) { return r2.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+      var aEl = document.createElement('a'); aEl.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); aEl.download = 'lcm-attendance-' + S.attMonth + '.csv'; aEl.click();
+    };
+  }
+  function attendanceForm(email, date) {
+    date = date || S.data.officeDate;
+    var rec = email && S.data.attendance.filter(function (x) { return x.email === email && x.date === date; })[0];
+    modal('<h3>Add / fix attendance</h3><p class="small muted" style="margin-top:-8px">For when someone forgot to check in or out. Times are India time (IST). Changes are marked "edited".</p><form id="af">' +
+      '<label class="field"><span>Member</span><select class="input" name="email">' + S.data.users.filter(function (u) { return u.active; }).map(function (u) { return '<option value="' + esc(u.email) + '"' + (u.email === email ? ' selected' : '') + '>' + esc(u.name) + '</option>'; }).join('') + '</select></label>' +
+      '<div class="grid2"><label class="field"><span>Date</span><input class="input" type="date" name="date" value="' + date + '" max="' + S.data.officeDate + '"></label><span></span>' +
+      '<label class="field"><span>Entry time *</span><input class="input" type="time" name="checkIn" required value="' + hhmm(rec && rec.checkIn) + '"></label>' +
+      '<label class="field"><span>Exit time</span><input class="input" type="time" name="checkOut" value="' + hhmm(rec && rec.checkOut) + '"></label></div>' +
+      '<label class="field"><span>Reason / note</span><input class="input" name="note" value="' + esc(rec ? rec.note : '') + '" placeholder="e.g. forgot to check out"></label>' +
+      '<div class="row">' + (rec ? '<button type="button" class="btn danger sm" id="afDel">Remove entry</button>' : '') + '<span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div></form>', function (m) {
+      var f = $('#af', m);
+      f.onsubmit = function (e) { e.preventDefault(); act('saveAttendance', { email: f.email.value, date: f.date.value, checkIn: f.checkIn.value, checkOut: f.checkOut.value, note: f.note.value }, 'Attendance saved').then(closeModal); };
+      if ($('#afDel', m)) $('#afDel', m).onclick = function () { if (confirm('Remove this attendance entry?')) act('deleteAttendance', { id: rec.id }, 'Entry removed').then(closeModal); };
+    });
+  }
+
   // ---------- Activity ----------
   function viewActivity(c) {
     var items = S.data.activity.slice().reverse();
