@@ -7,5 +7,5 @@
  */
 window.LCM_CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbw5DjYTw2u2-9c3OxdNCBGvHwQvqxN8ALVVzQ2y65q3NPGe_YVtay0OY4KeJo38uNKk/exec',
-  REFRESH_SECONDS: 60
+  REFRESH_SECONDS: 20
 };

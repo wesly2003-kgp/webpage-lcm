@@ -91,13 +91,20 @@
 
   // ---------- API ----------
   var preview = PREVIEW ? previewBackend() : null;
-  function api(action, payload) {
+  var pending = 0;
+  function busy(delta) {
+    pending = Math.max(0, pending + delta);
+    var bar = $('#busy');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'busy'; document.body.appendChild(bar); }
+    bar.className = pending ? 'on' : '';
+  }
+  function raw(action, payload) {
     if (PREVIEW) {
       return new Promise(function (res, rej) {
         setTimeout(function () {
           try { res(JSON.parse(JSON.stringify(preview.handle(action, payload, S.token)))); } catch (e) { rej(e); }
         }, 120);
-      }).catch(handleErr);
+      });
     }
     return fetch(API_URL, {
       method: 'POST',
@@ -106,7 +113,40 @@
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) { var e = new Error(j.error); e.code = j.code; throw e; }
       return j.data;
-    }).catch(handleErr);
+    });
+  }
+  // Calls the backend. Replies that carry fresh dashboard data ("state") are applied right away.
+  function api(action, payload) {
+    busy(1);
+    var seq = ++reqSeq;
+    return raw(action, payload).then(function (d) {
+      busy(-1);
+      if (d && d.state && Object.prototype.hasOwnProperty.call(d, 'result')) { applyState(d.state, seq); return d.result; }
+      return d;
+    }, function (e) { busy(-1); return handleErr(e); });
+  }
+  var reqSeq = 0, appliedSeq = 0;
+  // Sheets can hand back day columns as full timestamps; turn them back into yyyy-MM-dd (office time).
+  function day(v) { v = String(v || ''); return v.length > 10 && v.indexOf('T') > 0 ? officeDay(new Date(v)) : v; }
+  function normalize(d) {
+    d.attendance = (d.attendance || []).map(function (r) { r.date = day(r.date); return r; });
+    d.tasks.forEach(function (t) { t.startDate = day(t.startDate); t.dueDate = day(t.dueDate); });
+    d.dailyLogs.forEach(function (l) { l.date = day(l.date); });
+    return d;
+  }
+  function applyState(d, seq) {
+    if (seq && seq < appliedSeq) return; // an older reply arrived late; keep the newer data
+    appliedSeq = seq || appliedSeq;
+    if (d.serverNow) skew = Date.parse(d.serverNow) - Date.now();
+    d.officeDate = officeDay(serverNow());
+    S.data = normalize(d);
+    try { localStorage.setItem('lcm_cache', JSON.stringify({ token: S.token, data: d })); } catch (e) {}
+    // Don't redraw under someone who is typing in the dashboard; redraw when they finish.
+    if (!$('#content') || !isTyping()) render(); else S.dirty = true;
+  }
+  function isTyping() {
+    var a = document.activeElement;
+    return !!($('#modal') || (a && a.matches && a.matches('textarea, input:not([type=checkbox]):not([type=range]):not([type=file]), select')));
   }
   function handleErr(e) {
     if (e.code === 401 && S.token && S.data) { signOut(true); }
@@ -114,19 +154,24 @@
     throw e;
   }
   function refresh(silent) {
-    return api('bootstrap').then(function (d) {
-      if (d.serverNow) skew = Date.parse(d.serverNow) - Date.now();
-      d.officeDate = officeDay(serverNow());
-      d.attendance = d.attendance || [];
-      S.data = d;
-      render();
-    }).catch(function (e) { if (!silent) toast(e.message, 'err'); });
+    var seq = ++reqSeq;
+    busy(1);
+    return raw('bootstrap').then(function (d) { busy(-1); applyState(d, seq); })
+      .catch(function (e) { busy(-1); try { handleErr(e); } catch (x) { if (!silent) toast(x.message, 'err'); } });
   }
+  // Runs a change. The reply already includes the updated data, so the screen updates in one round trip.
   function act(action, payload, okMsg) {
+    var before = appliedSeq;
     return api(action, payload).then(function (r) {
       if (okMsg) toast(okMsg, 'ok');
-      return refresh(true).then(function () { return r; });
+      return ensureFresh(before).then(function () { return r; });
     }).catch(function (e) { toast(e.message, 'err'); throw e; });
+  }
+  // Older backends don't send fresh data with each change; reload it in that case.
+  function ensureFresh(before) {
+    if (appliedSeq === before) return refresh(true);
+    if (S.dirty && !isTyping()) { S.dirty = false; render(); }
+    return Promise.resolve();
   }
 
   // ---------- Preview backend (browser only) ----------
@@ -197,13 +242,19 @@
       mem.Activity.push({ id: id(), actor: 'chethan@lcmev.com', action: 'status', detail: 'Gearset torque test on bench: In Progress → Blocked', taskId: 't1', createdAt: ts(-1) });
       mem.Activity.push({ id: id(), actor: 'chethan@lcmev.com', action: 'proposal', detail: 'Proposed a new method for "Gearset torque test on bench"', taskId: 't1', createdAt: ts(-0.5) });
     }
-    return LCMCore(db, svc);
+    var core = LCMCore(db, svc);
+    // Re-read storage on every call so several tabs see each other's changes (like the real backend).
+    return { handle: function (action, payload, token) {
+      try { var fresh = JSON.parse(localStorage.getItem(KEY) || 'null'); if (fresh) mem = fresh; } catch (e) {}
+      Object.keys(LCM_TABLES).forEach(function (t) { if (!mem[t]) mem[t] = []; });
+      return core.handle(action, payload, token);
+    } };
   }
 
   // ---------- Auth ----------
   function signOut(expired) {
     if (S.token && !expired) api('logout').catch(function () {});
-    S.token = null; S.data = null; store('lcm_token', null);
+    S.token = null; S.data = null; store('lcm_token', null); store('lcm_cache', null);
     S.login = { step: 'email', email: '', role: S.login.role, previewCode: '' };
     if (expired) toast('Session expired. Please sign in again.', 'err');
     render();
@@ -585,7 +636,11 @@
     if (onMount) onMount(m);
     var first = m.querySelector('input,textarea,select'); if (first) first.focus();
   }
-  function closeModal() { ['#modal', '#mOverlay'].forEach(function (s) { var e = $(s); if (e) e.remove(); }); }
+  function closeModal() {
+    var had = !!$('#modal');
+    ['#modal', '#mOverlay'].forEach(function (s) { var e = $(s); if (e) e.remove(); });
+    if (had && S.dirty && S.data) { S.dirty = false; render(); }
+  }
   function employeeOptions(cur, allowAll) {
     return '<option value="">Unassigned</option>' + (allowAll ? '<option value="__all__">Every active employee (one task each)</option>' : '') +
       S.data.users.filter(function (u) { return u.active; }).map(function (u) { return '<option value="' + esc(u.email) + '"' + (u.email === cur ? ' selected' : '') + '>' + esc(u.name) + ' — ' + esc(u.department || u.role) + '</option>'; }).join('');
@@ -615,8 +670,9 @@
           if (isNew) {
             var targets = p.assignee === '__all__' ? S.data.users.filter(function (u) { return u.active && u.role === 'employee'; }).map(function (u) { return u.email; }) : [p.assignee];
             if (!targets.length) { toast('No active employees to assign to', 'err'); btn.disabled = false; return; }
+            var before = appliedSeq;
             targets.reduce(function (pr, a) { return pr.then(function () { return api('createTask', Object.assign({}, p, { assignee: a })); }); }, Promise.resolve())
-              .then(function () { toast(targets.length > 1 ? 'Created ' + targets.length + ' tasks' : 'Task created', 'ok'); done(); refresh(true); })
+              .then(function () { return ensureFresh(before); }).then(function () { toast(targets.length > 1 ? 'Created ' + targets.length + ' tasks' : 'Task created', 'ok'); done(); })
               .catch(function (er) { toast(er.message, 'err'); btn.disabled = false; });
           } else {
             p.id = t.id;
@@ -685,7 +741,8 @@
         var st = b.dataset.st; if (st === t.status) return;
         var note = st === 'Blocked' ? prompt('What is blocking this task? (added as a remark)') : '';
         if (note === null) return;
-        act('updateTask', { id: t.id, status: st, remark: note || '' }, 'Status → ' + st);
+        var prev = t.status; t.status = st; if (st === 'Completed') t.progress = 100; renderDrawer();
+        act('updateTask', { id: t.id, status: st, remark: note || '' }, 'Status → ' + st).catch(function () { t.status = prev; render(); });
       };
     });
     var prog = $('#prog', d);
@@ -852,7 +909,12 @@
     return '<span class="small muted nowrap hide-sm">✓ ' + fmtTime(r.checkIn) + ' – ' + fmtTime(r.checkOut) + '</span>';
   }
   function bindAttendanceButtons(root) {
-    $$('[data-checkin]', root).forEach(function (b) { b.onclick = function () { b.disabled = true; act('checkIn', {}, 'Marked present ✓').catch(function () { b.disabled = false; }); }; });
+    $$('[data-checkin]', root).forEach(function (b) {
+      b.onclick = function () {
+        $$('[data-checkin]').forEach(function (x) { x.disabled = true; x.innerHTML = icon('clock', 15) + '<span>Checking in…</span>'; });
+        act('checkIn', {}, 'Marked present ✓ — check out when you leave').then(render).catch(function () { render(); });
+      };
+    });
     $$('[data-checkout]', root).forEach(function (b) { b.onclick = checkoutForm; });
     $$('[data-report]', root).forEach(function (b) { b.onclick = function () { showReport(b.dataset.report); }; });
   }
@@ -886,11 +948,12 @@
             });
           });
         }, Promise.resolve());
+        var before;
         chain.then(function () {
-          st.textContent = 'Saving report to Drive…';
+          st.textContent = 'Saving report to Drive…'; before = appliedSeq;
           return api('checkOut', { report: f.report.value, blockers: f.blockers.value, plan: f.plan.value, files: uploaded,
             taskIds: $$('input[name=task]:checked', f).map(function (x) { return x.value; }) });
-        }).then(function () { closeModal(); toast('Checked out — report saved to Drive', 'ok'); return refresh(true); })
+        }).then(function () { return ensureFresh(before); }).then(function () { closeModal(); toast('Checked out — report saved to Drive', 'ok'); render(); })
           .catch(function (er) { toast(er.message, 'err'); st.textContent = ''; btn.disabled = false; });
       };
     });
@@ -1027,6 +1090,21 @@
 
   // ---------- Boot ----------
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modal')) closeModal(); else if (S.openTask) closeDrawer(); } });
-  setInterval(function () { if (S.token && S.data && !document.hidden && !$('#modal') && !document.activeElement.matches('textarea,input')) refresh(true); }, (CFG.REFRESH_SECONDS || 60) * 1000);
-  if (S.token) { render(); refresh(); } else render();
+  // Live updates: poll while the tab is visible, and refresh the moment someone comes back to the tab.
+  var lastPoll = 0;
+  function poll(force) {
+    if (!S.token || !S.data || document.hidden || pending) return;
+    if (!force && Date.now() - lastPoll < (CFG.REFRESH_SECONDS || 20) * 1000) return;
+    lastPoll = Date.now();
+    refresh(true);
+  }
+  setInterval(function () { poll(false); }, 5000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(true); });
+  window.addEventListener('focus', function () { poll(true); });
+  document.addEventListener('focusout', function () { setTimeout(function () { if (S.dirty && !isTyping()) { S.dirty = false; render(); } }, 0); });
+  // Instant start: show the last-seen data immediately, then fetch fresh data in the background.
+  if (S.token) {
+    try { var c = JSON.parse(localStorage.getItem('lcm_cache') || 'null'); if (c && c.token === S.token) { S.data = normalize(c.data); S.data.officeDate = officeDay(new Date()); } } catch (e) {}
+    render(); lastPoll = Date.now(); refresh();
+  } else render();
 })();

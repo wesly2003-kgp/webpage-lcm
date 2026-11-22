@@ -15,7 +15,12 @@ var DEFAULT_DRIVE_FOLDER_ID = '18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i';
 
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  Object.keys(LCM_TABLES).forEach(function (name) { sheet_(ss, name); });
+  Object.keys(LCM_TABLES).forEach(function (name) {
+    var sh = sheet_(ss, name), cols = LCM_TABLES[name];
+    // Upgrade older sheets: full header row + plain-text format so Sheets never turns "2026-11-22" into a Date.
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+    sh.getRange(1, 1, sh.getMaxRows(), cols.length).setNumberFormat('@');
+  });
   uploadsFolder_();
   Logger.log('Ready. Sheets created, uploads folder: ' + uploadsFolder_().getUrl());
 }
@@ -57,23 +62,29 @@ function sheet_(ss, name) {
   return sh;
 }
 
+// Columns that hold a calendar day (yyyy-MM-dd), not a moment in time.
+var DAY_COLS_ = { date: 1, startDate: 1, dueDate: 1 };
+
 function sheetDb_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var cache = {};
-  function rows(name) {
-    if (cache[name]) return cache[name];
-    var sh = sheet_(ss, name);
+  var tz = ss.getSpreadsheetTimeZone() || LCM_TIMEZONE;
+  var cache = {}, sheets = {};
+  function sh_(name) { return sheets[name] || (sheets[name] = sheet_(ss, name)); }
+  function norm(c, v) {
+    if (v instanceof Date) return DAY_COLS_[c] ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v.toISOString();
+    return v === null || v === undefined ? '' : v;
+  }
+  function read(name, firstRow, count) {
     var cols = LCM_TABLES[name];
-    var last = sh.getLastRow();
-    var values = last > 1 ? sh.getRange(2, 1, last - 1, cols.length).getValues() : [];
-    cache[name] = values.map(function (r, i) {
-      var o = { _row: i + 2 };
-      cols.forEach(function (c, j) {
-        var v = r[j];
-        o[c] = v instanceof Date ? v.toISOString() : (v === null ? '' : v);
-      });
+    if (count <= 0) return [];
+    return sh_(name).getRange(firstRow, 1, count, cols.length).getValues().map(function (r, i) {
+      var o = { _row: firstRow + i };
+      cols.forEach(function (c, j) { o[c] = norm(c, r[j]); });
       return o;
     });
+  }
+  function rows(name) {
+    if (!cache[name]) cache[name] = read(name, 2, sh_(name).getLastRow() - 1);
     return cache[name];
   }
   function clean(o) { var c = {}; Object.keys(o).forEach(function (k) { if (k !== '_row') c[k] = o[k]; }); return c; }
@@ -82,10 +93,19 @@ function sheetDb_() {
   }
   return {
     all: function (name) { return rows(name).map(clean); },
+    // Only the newest `n` rows — keeps big logs (Activity) fast to load.
+    tail: function (name, n) {
+      if (cache[name]) return cache[name].slice(-n).map(clean);
+      var last = sh_(name).getLastRow();
+      var first = Math.max(2, last - n + 1);
+      return read(name, first, last - first + 1).map(clean);
+    },
     insert: function (name, obj) {
-      var sh = sheet_(ss, name);
-      sh.appendRow(toRow(name, obj));
-      delete cache[name];
+      var sh = sh_(name), row = sh.getLastRow() + 1, cols = LCM_TABLES[name].length;
+      // Write as plain text so dates/times are stored exactly as sent.
+      var values = toRow(name, obj);
+      sh.getRange(row, 1, 1, cols).setNumberFormat('@').setValues([values]);
+      if (cache[name]) { var o = { _row: row }; LCM_TABLES[name].forEach(function (c, j) { o[c] = values[j]; }); cache[name].push(o); }
       return obj;
     },
     update: function (name, id, patch) {
@@ -93,13 +113,14 @@ function sheetDb_() {
       if (!r) throw new Error(name + ' row not found');
       var merged = clean(r);
       Object.keys(patch).forEach(function (k) { merged[k] = patch[k]; });
-      sheet_(ss, name).getRange(r._row, 1, 1, LCM_TABLES[name].length).setValues([toRow(name, merged)]);
-      delete cache[name];
+      var values = toRow(name, merged);
+      sh_(name).getRange(r._row, 1, 1, values.length).setNumberFormat('@').setValues([values]);
+      LCM_TABLES[name].forEach(function (c, j) { r[c] = values[j]; });
       return merged;
     },
     remove: function (name, id) {
       var r = rows(name).filter(function (x) { return x.id === id; })[0];
-      if (r) sheet_(ss, name).deleteRow(r._row);
+      if (r) sh_(name).deleteRow(r._row);
       delete cache[name];
     }
   };
@@ -306,14 +327,18 @@ function LCMCore(db, svc) {
   function auth(token) {
     if (!token) throw err('Please sign in', 401);
     var id = svc.hash(token);
-    var s = db.all('Sessions').filter(function (x) { return x.id === id; })[0];
+    // Sessions are cached for up to 6 hours so most requests skip reading the Sessions sheet.
+    var s = svc.cacheGet('sess_' + id);
+    s = s ? JSON.parse(s) : db.all('Sessions').filter(function (x) { return x.id === id; })[0];
     if (!s || Date.parse(s.expiresAt) < Date.parse(now())) throw err('Session expired. Please sign in again.', 401);
+    svc.cachePut('sess_' + id, JSON.stringify({ email: s.email, expiresAt: s.expiresAt }), 21600);
     var u = findUser(s.email);
     if (!u || !u.active) throw err('Account not active', 403);
     return publicUser(u);
   }
 
   function logout(user, p, token) {
+    svc.cacheRemove('sess_' + svc.hash(token));
     db.remove('Sessions', svc.hash(token));
     return { ok: true };
   }
@@ -337,7 +362,7 @@ function LCMCore(db, svc) {
       serverNow: now(),
       officeDate: officeDate(),
       timezone: LCM_TIMEZONE,
-      activity: db.all('Activity').filter(function (a) {
+      activity: (db.tail ? db.tail('Activity', 400) : db.all('Activity').slice(-400)).filter(function (a) {
         return user.role === 'admin' || lc(a.actor) === lc(user.email) || ids[a.taskId];
       }).slice(-300),
       departments: users().map(function (u) { return u.department; }).filter(function (d, i, a) { return d && a.indexOf(d) === i; }).sort(),
@@ -603,7 +628,11 @@ function LCMCore(db, svc) {
       if (action === 'ping') return { ok: true };
       var fn = authed[action];
       if (!fn) throw err('Unknown action: ' + action);
-      return fn(auth(token), payload, token);
+      var user = auth(token);
+      var result = fn(user, payload, token);
+      // Changes return the fresh dashboard data in the same reply, saving a second round trip.
+      if (action === 'bootstrap' || action === 'logout' || action === 'uploadFile') return result;
+      return { result: result, state: bootstrap(user) };
     }
   };
 }

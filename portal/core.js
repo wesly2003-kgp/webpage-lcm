@@ -114,14 +114,18 @@ function LCMCore(db, svc) {
   function auth(token) {
     if (!token) throw err('Please sign in', 401);
     var id = svc.hash(token);
-    var s = db.all('Sessions').filter(function (x) { return x.id === id; })[0];
+    // Sessions are cached for up to 6 hours so most requests skip reading the Sessions sheet.
+    var s = svc.cacheGet('sess_' + id);
+    s = s ? JSON.parse(s) : db.all('Sessions').filter(function (x) { return x.id === id; })[0];
     if (!s || Date.parse(s.expiresAt) < Date.parse(now())) throw err('Session expired. Please sign in again.', 401);
+    svc.cachePut('sess_' + id, JSON.stringify({ email: s.email, expiresAt: s.expiresAt }), 21600);
     var u = findUser(s.email);
     if (!u || !u.active) throw err('Account not active', 403);
     return publicUser(u);
   }
 
   function logout(user, p, token) {
+    svc.cacheRemove('sess_' + svc.hash(token));
     db.remove('Sessions', svc.hash(token));
     return { ok: true };
   }
@@ -145,7 +149,7 @@ function LCMCore(db, svc) {
       serverNow: now(),
       officeDate: officeDate(),
       timezone: LCM_TIMEZONE,
-      activity: db.all('Activity').filter(function (a) {
+      activity: (db.tail ? db.tail('Activity', 400) : db.all('Activity').slice(-400)).filter(function (a) {
         return user.role === 'admin' || lc(a.actor) === lc(user.email) || ids[a.taskId];
       }).slice(-300),
       departments: users().map(function (u) { return u.department; }).filter(function (d, i, a) { return d && a.indexOf(d) === i; }).sort(),
@@ -411,7 +415,11 @@ function LCMCore(db, svc) {
       if (action === 'ping') return { ok: true };
       var fn = authed[action];
       if (!fn) throw err('Unknown action: ' + action);
-      return fn(auth(token), payload, token);
+      var user = auth(token);
+      var result = fn(user, payload, token);
+      // Changes return the fresh dashboard data in the same reply, saving a second round trip.
+      if (action === 'bootstrap' || action === 'logout' || action === 'uploadFile') return result;
+      return { result: result, state: bootstrap(user) };
     }
   };
 }
