@@ -15,15 +15,12 @@ It goes live with a free Google Apps Script backend:
 
 1. Go to <https://sheets.new> and name the sheet **LCM Portal DB**.
 2. **Extensions → Apps Script**.
-3. Rename `Code.gs` → paste the contents of [`portal/backend/Code.gs`](backend/Code.gs).
-4. Click **+ → Script**, name it `Core`, and paste the contents of [`portal/core.js`](core.js).
-5. ⚙️ **Project Settings → Script properties → Add**:
-   - `ADMIN_EMAILS` = the admin email(s), comma-separated, e.g. `wesleyj@…,anil@…`
-   - *(optional)* `DRIVE_FOLDER_ID`: only if you want a folder other than **LCM - WORK**,
-     which is already built in (`18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i`).
-   - ⚠️ Do steps 1–7 while signed in to a Google account that has **Editor** access to LCM - WORK
-     (it is owned by eloopchargingsolutions@gmail.com; doing the setup from that account is simplest).
-6. Select the `setup` function → **Run** → allow the permissions (Sheets, Gmail send, Drive).
+3. Delete everything in `Code.gs` and paste the **whole** of [`portal/backend/AppsScript-AllInOne.gs`](backend/AppsScript-AllInOne.gs)
+   (raw: https://raw.githubusercontent.com/wesly2003-kgp/webpage-lcm/main/portal/backend/AppsScript-AllInOne.gs).
+   It already contains the admin emails (`DEFAULT_ADMIN_EMAILS`) and the LCM - WORK folder ID. Do not add a separate Core file.
+4. *(optional)* Project Settings → Script properties: `ADMIN_EMAILS` or `DRIVE_FOLDER_ID` override the built-in values.
+5. ⚠️ Do all of this while signed in as **eloopchargingsolutions@gmail.com** (owner of LCM - WORK); OTP emails are sent from this account.
+6. In the toolbar's function menu pick **setup** (not myFunction) → **Run** → allow the permissions (Sheets, Gmail send, Drive).
 7. **Deploy → New deployment → ⚙️ Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -87,7 +84,7 @@ LCM - WORK/
 
 ## Updating the backend later
 
-After changing `Code.gs` or `core.js` in Apps Script: **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. The URL stays the same.
+After changing `Code.gs` or `core.js`, run `portal/backend/build.sh`, paste the new all-in-one file into Apps Script, then: **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. The URL stays the same.
 
 ## Security notes
 - Sign-in codes are 6 digits, valid for 10 minutes, with 5 attempts max. They are stored hashed and can be used once.

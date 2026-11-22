@@ -1,16 +1,12 @@
-/*
- * LCM Work Portal — Google Apps Script backend.
- *
- * Setup (≈5 minutes, full steps in portal/SETUP.md):
- *   1. Create a Google Sheet (it becomes the database), then Extensions → Apps Script.
- *   2. Add two script files: "Core.gs" (paste portal/core.js) and "Code.gs" (paste this file).
- *   3. Project Settings → Script properties:
- *        ADMIN_EMAILS      = you@example.com,other-admin@example.com   (required)
- *        DRIVE_FOLDER_ID   = (optional) overrides DEFAULT_DRIVE_FOLDER_ID below
- *   4. Run `setup` once from the editor and accept the permissions.
- *   5. Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone.
- *      Copy the /exec URL into portal/config.js (API_URL).
- */
+// ============================================================
+// LCM Work Portal — Google Apps Script backend (ALL-IN-ONE FILE)
+// Paste this whole file into Code.gs. Nothing else is needed.
+// Then: pick "setup" in the function menu → Run → allow access.
+// Then: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone).
+// ============================================================
+
+// Admins who can sign in on day one. More people are added from the portal's Team page.
+var DEFAULT_ADMIN_EMAILS = ['eloopchargingsolutions@gmail.com', 'wesleyj84660@gmail.com'];
 
 // "LCM - WORK" — https://drive.google.com/drive/folders/18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i
 // Uploads are saved as: LCM - WORK / <Department> / <Task> / <file>
@@ -114,7 +110,7 @@ function services_() {
   var props = PropertiesService.getScriptProperties();
   var cache = CacheService.getScriptCache();
   return {
-    adminEmails: String(props.getProperty('ADMIN_EMAILS') || '').split(',').map(function (s) { return s.trim(); }).filter(String),
+    adminEmails: (props.getProperty('ADMIN_EMAILS') ? String(props.getProperty('ADMIN_EMAILS')).split(',') : DEFAULT_ADMIN_EMAILS).map(function (s) { return String(s).trim(); }).filter(String),
     now: function () { return new Date().toISOString(); },
     uuid: function () { return Utilities.getUuid().replace(/-/g, ''); },
     random: function () { return Math.random(); },
