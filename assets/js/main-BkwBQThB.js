@@ -923,6 +923,10 @@ const Fe = m("Zap", [
                             onClick: r => L("/#contact", r, i, o),
                             className: "px-5 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-full text-base font-medium transition-colors",
                             children: "Contact Us"
+                        }), e.jsx("a", {
+                            href: "/portal/",
+                            className: "px-5 py-2 border border-white/20 hover:border-white/50 text-white rounded-full text-base font-medium transition-colors",
+                            children: "Login"
                         })]
                     }), e.jsx("button", {
                         className: "md:hidden p-2 text-white/70 hover:text-white transition-colors",
@@ -977,6 +981,10 @@ const Fe = m("Zap", [
                                 },
                                 className: "text-base font-medium text-primary-500 hover:text-primary-400 transition-colors",
                                 children: "Contact Us"
+                            }), e.jsx("a", {
+                                href: "/portal/",
+                                className: "text-base font-medium text-white/70 hover:text-white transition-colors",
+                                children: "Employee / Admin Login"
                             })]
                         })
                     })
