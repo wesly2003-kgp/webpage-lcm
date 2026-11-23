@@ -344,7 +344,7 @@
     return [
       ['overview', 'Overview', 'overview'],
       ['tasks', a ? 'All Tasks' : 'My Tasks', 'tasks'],
-      S.data.features && S.data.features.mind ? ['mind', 'My Mind', 'mind'] : null,
+      hasMind() ? ['mind', 'My Mind', 'mind'] : null,
       ['attendance', 'Attendance', 'clock'],
       ['daily', 'Daily Works', 'daily'],
       ['approvals', a ? 'Approvals' : 'Method Changes', 'approvals', a ? pending : 0],
@@ -353,13 +353,19 @@
       ['activity', 'Activity', 'activity']
     ].filter(Boolean);
   }
+  // Server decides (features.mind). Older backends don't send features yet: fall back to the owner's email.
+  function hasMind() {
+    var f = S.data && S.data.features;
+    if (f) return !!f.mind;
+    return !!(S.data && S.data.me && ['wesleyj84660@gmail.com'].indexOf(S.data.me.email) >= 0);
+  }
   var TITLES = { mind: 'My Mind', attendance: 'Attendance', overview: 'Overview', tasks: 'Tasks', daily: 'Daily Works', approvals: 'Approvals', team: 'Team', files: 'Files', activity: 'Activity' };
 
   function render() {
     if (!S.token) return renderLogin();
     if (!S.data) { $('#app').innerHTML = '<div class="boot">Loading your workspace…</div>'; return; }
     if (S.view === 'team' && !isAdmin()) S.view = 'overview';
-    if (S.view === 'mind' && !(S.data.features && S.data.features.mind)) S.view = 'overview';
+    if (S.view === 'mind' && !hasMind()) S.view = 'overview';
     var me = S.data.me;
     var html = (PREVIEW ? previewBanner() : '') + '<div class="shell"><aside class="side" id="side">' +
       '<div class="logo"><img src="' + LOGO + '" alt=""><b>Work Portal</b></div><nav class="nav">' +
