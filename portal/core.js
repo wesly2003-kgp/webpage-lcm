@@ -22,7 +22,9 @@ var LCM_TABLES = {
   Activity: ['id', 'actor', 'action', 'detail', 'taskId', 'createdAt'],
   Attendance: ['id', 'date', 'email', 'checkIn', 'checkOut', 'note', 'report', 'reportUrl', 'editedBy', 'createdAt'],
   // Private "My Mind" space: notes (kind=note) and mind-tree items (kind=node), one row each.
-  Mind: ['id', 'owner', 'kind', 'parentId', 'title', 'body', 'status', 'links', 'tags', 'order', 'collapsed', 'createdAt', 'updatedAt'],
+  Mind: ['id', 'owner', 'kind', 'parentId', 'title', 'body', 'status', 'links', 'tags', 'order', 'collapsed', 'createdAt', 'updatedAt', 'meta'],
+  // Links My Mind tasks to the Google Calendar events created for their deadlines (backend only).
+  MindCal: ['id', 'owner', 'eventId', 'series', 'sig', 'mode', 'updatedAt'],
   Sessions: ['id', 'email', 'expiresAt', 'createdAt']
 };
 
@@ -419,22 +421,45 @@ function LCMCore(db, svc) {
     var mine = {};
     db.all('Mind').forEach(function (r) { if (lc(r.owner) === lc(user.email)) mine[r.id] = r; else mine[r.id] = false; });
     var fresh = [], saved = 0;
-    (Array.isArray(p.upserts) ? p.upserts : []).slice(0, 500).forEach(function (it) {
+    (Array.isArray(p.upserts) ? p.upserts : []).slice(0, 2000).forEach(function (it) {
       var id = str(it.id, 64);
       if (!id || mine[id] === false) return; // never overwrite someone else's row
       var row = { kind: it.kind === 'note' ? 'note' : 'node', parentId: str(it.parentId, 64), title: str(it.title, 300),
         body: str(it.body, 45000), status: str(it.status, 20), links: str(it.links, 4000), tags: str(it.tags, 500),
-        order: num(it.order, 0), collapsed: bool(it.collapsed) ? 'true' : '', updatedAt: now() };
+        order: num(it.order, 0), collapsed: bool(it.collapsed) ? 'true' : '', meta: str(it.meta, 6000), updatedAt: now() };
       if (mine[id]) { db.update('Mind', id, row); }
       else { row.id = id; row.owner = lc(user.email); row.createdAt = now(); fresh.push(row); mine[id] = row; }
       saved++;
     });
     if (fresh.length) { if (db.insertMany) db.insertMany('Mind', fresh); else fresh.forEach(function (r) { db.insert('Mind', r); }); }
-    var removed = 0;
-    (Array.isArray(p.deletes) ? p.deletes : []).slice(0, 500).forEach(function (id) {
-      if (mine[id]) { db.remove('Mind', id); removed++; }
-    });
-    return { saved: saved, removed: removed, serverNow: now() };
+    var dels = (Array.isArray(p.deletes) ? p.deletes : []).slice(0, 2000).filter(function (id) { return mine[id]; });
+    if (dels.length > 3 && db.removeMany) db.removeMany('Mind', dels);
+    else dels.forEach(function (id) { db.remove('Mind', id); });
+    var removed = dels.length;
+    // Mirror deadlines to Google Calendar (never blocks saving if Calendar fails)
+    var cal = null;
+    if (svc.calendarSync) {
+      try {
+        var fresh = mindLookup(user); // rows as just saved
+        var changed = (Array.isArray(p.upserts) ? p.upserts : []).map(function (it) { return fresh[str(it.id, 64)]; }).filter(function (r) { return r && r.kind === 'node'; });
+        cal = svc.calendarSync(lc(user.email), changed, dels, fresh, false);
+      } catch (e) { cal = { error: String(e.message || e) }; }
+    }
+    return { saved: saved, removed: removed, calendar: cal, serverNow: now() };
+  }
+
+  function mindLookup(user) {
+    var byId = {};
+    db.all('Mind').forEach(function (r) { if (lc(r.owner) === lc(user.email)) byId[r.id] = r; });
+    return byId;
+  }
+  // Full reconcile of every task with a deadline against Google Calendar.
+  function mindCalSync(user) {
+    requireMind(user);
+    if (!svc.calendarSync) return { calendar: { mode: 'off' } };
+    var all = mindLookup(user);
+    var list = Object.keys(all).map(function (k) { return all[k]; }).filter(function (r) { return r.kind === 'node'; });
+    return { calendar: svc.calendarSync(lc(user.email), list, [], all, true) };
   }
 
   var authed = {
@@ -442,7 +467,7 @@ function LCMCore(db, svc) {
     addRemark: addRemark, createProposal: createProposal, reviewProposal: reviewProposal,
     uploadFile: uploadFile, addDailyLog: addDailyLog, saveUser: saveUser,
     checkIn: checkIn, checkOut: checkOut, saveAttendance: saveAttendance, deleteAttendance: deleteAttendance,
-    mindLoad: mindLoad, mindSync: mindSync
+    mindLoad: mindLoad, mindSync: mindSync, mindCalSync: mindCalSync
   };
 
   return {

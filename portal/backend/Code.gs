@@ -8,6 +8,11 @@
 // Admins who can sign in on day one. More people are added from the portal's Team page.
 var DEFAULT_ADMIN_EMAILS = ['eloopchargingsolutions@gmail.com', 'wesleyj84660@gmail.com'];
 
+// Google Calendar that receives My Mind deadlines. Share this calendar with the account that runs
+// the script ("Make changes to events"); otherwise events are created on the script owner's calendar
+// with this address invited as a guest.
+var MIND_CALENDAR_ID = 'wesleyj84660@gmail.com';
+
 // "LCM - WORK" — https://drive.google.com/drive/folders/18lrhR09L3AlYDWeyz-_rzVeVPClLZl4i
 // Uploads are saved as: LCM - WORK / <Department> / <Task> / <file>
 // The Google account that deploys this script must have Editor access to this folder.
@@ -130,6 +135,16 @@ function sheetDb_() {
       var r = rows(name).filter(function (x) { return x.id === id; })[0];
       if (r) sh_(name).deleteRow(r._row);
       delete cache[name];
+    },
+    // Deletes many rows at once by rewriting the sheet body in one write (fast for "clear all").
+    removeMany: function (name, ids) {
+      var kill = {}; ids.forEach(function (i) { kill[i] = 1; });
+      var all = rows(name), keep = all.filter(function (r) { return !kill[r.id]; });
+      if (keep.length === all.length) return;
+      var sh = sh_(name), cols = LCM_TABLES[name].length;
+      if (all.length) sh.getRange(2, 1, all.length, cols).clearContent();
+      if (keep.length) sh.getRange(2, 1, keep.length, cols).setNumberFormat('@').setValues(keep.map(function (r) { return toRow(name, r); }));
+      delete cache[name];
     }
   };
 }
@@ -194,7 +209,8 @@ function services_() {
       file.moveTo(folderPath_(r.path));
       return { id: file.getId(), url: file.getUrl() };
     },
-    folderUrl: function () { return uploadsFolder_().getUrl(); }
+    folderUrl: function () { return uploadsFolder_().getUrl(); },
+    calendarSync: function (owner, items, deletedIds, all, full) { return mindCalendar_(owner, items, deletedIds, all, full); }
   };
 }
 
@@ -215,4 +231,72 @@ function subFolder_(parent, name) {
   name = String(name || 'General').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 100) || 'General';
   var it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+
+
+// ---------- My Mind → Google Calendar ----------
+// One all-day event per task that has a deadline (or a repeat rule). Changed tasks get their event
+// replaced; tasks that lose their deadline or are deleted lose their event.
+function mindCalendar_(owner, items, deletedIds, all, full) {
+  var started = Date.now(), budgetMs = full ? 240000 : 20000;
+  var calId = PropertiesService.getScriptProperties().getProperty('MIND_CALENDAR_ID') || MIND_CALENDAR_ID;
+  var cal = null, mode = 'direct';
+  try { cal = CalendarApp.getCalendarById(calId); } catch (e) {}
+  if (!cal) { cal = CalendarApp.getDefaultCalendar(); mode = calId === Session.getEffectiveUser().getEmail() ? 'direct' : 'invite'; }
+  var db = sheetDb_(), links = {};
+  db.all('MindCal').forEach(function (r) { if (String(r.owner).toLowerCase() === owner) links[r.id] = r; });
+  var done = 0, pending = 0, errors = 0;
+  function meta(r) { try { return r.meta ? JSON.parse(r.meta) : {}; } catch (e) { return {}; } }
+  function dropEvent(link) {
+    try {
+      if (link.series === 'true') { var s = cal.getEventSeriesById(link.eventId); if (s) s.deleteEventSeries(); }
+      else { var ev = cal.getEventById(link.eventId); if (ev) ev.deleteEvent(); }
+    } catch (e) {}
+  }
+  function day(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function isDoneNow(r, m) { return m.recur ? false : r.status === 'done'; }
+  function pathOf(r) { var out = [], cur = r, g = 0; while (cur && cur.parentId && g++ < 40) { cur = all[cur.parentId]; if (cur) out.unshift(cur.title); } return out.join(' › '); }
+  function hasKids(id) { for (var k in all) { if (all[k].parentId === id && all[k].kind === 'node') return true; } return false; }
+  function wanted(r) { var m = meta(r); return r && r.kind === 'node' && (m.due || m.recur) && !hasKids(r.id) ? m : null; }
+  var queue = items.slice();
+  if (full) Object.keys(links).forEach(function (id) { if (!all[id]) deletedIds = deletedIds.concat([id]); });
+  deletedIds.forEach(function (id) {
+    var l = links[id]; if (!l) return;
+    if (Date.now() - started > budgetMs) { pending++; return; }
+    dropEvent(l); db.remove('MindCal', id); done++;
+  });
+  queue.forEach(function (r) {
+    var m = wanted(r), l = links[r.id];
+    if (!m) { if (l) { if (Date.now() - started > budgetMs) { pending++; return; } dropEvent(l); db.remove('MindCal', r.id); done++; } return; }
+    var finished = isDoneNow(r, m);
+    var title = (finished ? '✓ ' : '') + (+m.pri >= 3 ? '⚑ ' : '') + (m.icon ? m.icon + ' ' : '') + r.title;
+    var desc = (pathOf(r) ? pathOf(r) + '\n\n' : '') + (r.body ? r.body + '\n\n' : '') + 'Open My Mind: https://lcmev.com/portal/';
+    var sig = JSON.stringify([title, m.due || '', m.start || '', m.recur || '', desc.length, mode, calId]);
+    if (l && l.sig === sig) return;
+    if (Date.now() - started > budgetMs) { pending++; return; }
+    try {
+      if (l) dropEvent(l);
+      var opts = { description: desc }, ev, series = false;
+      if (m.recur) {
+        var rec = CalendarApp.newRecurrence();
+        if (m.recur === 'daily') rec.addDailyRule();
+        else if (m.recur === 'weekdays') rec.addWeeklyRule().onlyOnWeekdays([CalendarApp.Weekday.MONDAY, CalendarApp.Weekday.TUESDAY, CalendarApp.Weekday.WEDNESDAY, CalendarApp.Weekday.THURSDAY, CalendarApp.Weekday.FRIDAY]);
+        else if (m.recur === 'weekly') rec.addWeeklyRule();
+        else rec.addMonthlyRule();
+        var first = m.due || m.start || Utilities.formatDate(new Date(), LCM_TIMEZONE, 'yyyy-MM-dd');
+        ev = cal.createAllDayEventSeries('↻ ' + title, day(first), rec, opts); series = true;
+      } else if (m.start && m.due && m.start < m.due) {
+        var end = day(m.due); end.setDate(end.getDate() + 1);
+        ev = cal.createAllDayEvent(title, day(m.start), end, opts);
+      } else {
+        ev = cal.createAllDayEvent(title, day(m.due || m.start), opts);
+      }
+      if (mode === 'invite') { try { ev.addGuest(owner); } catch (e) {} }
+      try { if (!series) ev.addPopupReminder(15 * 60); } catch (e) {} // all-day events: 900 min before midnight = 9:00 AM the day before
+      var row = { id: r.id, owner: owner, eventId: ev.getId(), series: series ? 'true' : '', sig: sig, mode: mode, updatedAt: new Date().toISOString() };
+      if (l) db.update('MindCal', r.id, row); else db.insert('MindCal', row);
+      done++;
+    } catch (e) { errors++; }
+  });
+  return { mode: mode, calendar: calId, changed: done, pending: pending, errors: errors };
 }

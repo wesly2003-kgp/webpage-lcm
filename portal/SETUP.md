@@ -73,13 +73,29 @@ LCM - WORK/
 
 ## My Mind (private — wesleyj84660@gmail.com only)
 
-A personal second brain inside the portal. Only accounts in `LCM_MIND_OWNERS` (in `core.js`) see it. The server blocks everyone else, admins included.
+A personal planning space. Only accounts in `LCM_MIND_OWNERS` (in `core.js`) can see it, and the server blocks everyone else, admins included.
+The same tasks appear in every view, so a change made anywhere shows everywhere:
 
-- **Mind Tree**: an outline of work with unlimited sub-tasks. Progress rolls up from sub-tasks. 🔗 links mean "depends on", and each item is shown as **Ready / Doing / Blocked / Done**. Keys: ↑↓ move, Space marks done, Enter adds a sibling, Tab / Shift+Tab indent, F2 renames, Del deletes.
-- **Mind Map**: a visual tree with dependency arrows. Drag to pan, scroll to zoom, double-click a branch to focus on it.
-- **Notes**: Obsidian-style Markdown with `[[wikilinks]]` (with autocomplete), backlinks, `#tags`, `- [ ]` checkboxes and a **Today** daily note.
-- **Graph**: how notes (and the tasks that mention them) link together.
-- It is stored in the `Mind` sheet. On first open it loads a starter plan: 103 linked LCM work items and 9 notes.
+- **Tree**: an outline with unlimited sub-tasks, progress roll-up, and Ready / Doing / Blocked / Done.
+- **Map**: a free canvas.
+  - Drag boxes anywhere; drop a box onto another to make it a sub-task.
+  - Drag ↗ onto another box to link "must finish first".
+  - Double-click the canvas to add a box; right-click for a menu; Shift+drag selects several.
+  - Three auto-layouts (tree, mind map, org chart), three line styles, focus on one branch, minimap, zoom, PNG/SVG export.
+- **Board** (kanban), **Timeline** (drag bars to change dates) and **Calendar** (drag tasks to another day).
+- **Side panel**: start date, deadline, repeat (daily / weekdays / weekly / monthly, with streaks), priority, estimate, owner, tags, colour, icon, dependencies, and sub-notes with checklists.
+- **Quick add**: e.g. `Call vendor tomorrow !high #parts >Electronics every day`.
+- **Manage menu**: paste an outline, load the sample plan, back up / restore, export Markdown or CSV, clear tasks / notes / everything.
+- **Undo / Redo**: Ctrl+Z / Ctrl+Y.
+- **Notes**: Obsidian-style `[[links]]`, backlinks, tags and daily notes, plus a **Graph** view.
+
+### Google Calendar
+Every task with a deadline or a repeat becomes an all-day event (repeating tasks become repeating events).
+Done tasks get a ✓, and deleted tasks or cleared deadlines remove their event.
+
+- **Best setup:** in Google Calendar, signed in as **wesleyj84660@gmail.com**, open ⚙ Settings → *Settings for my calendars* → your calendar → *Share with specific people* → add **eloopchargingsolutions@gmail.com** with **Make changes to events**. Then click **Manage → Sync Google Calendar now** in My Mind.
+- **Without sharing:** events are created on the portal account's calendar, with wesleyj84660@gmail.com invited.
+- **Other calendar:** set the `MIND_CALENDAR_ID` script property to use a different one.
 
 ## How it works
 
