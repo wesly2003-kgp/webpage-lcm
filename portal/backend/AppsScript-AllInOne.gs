@@ -118,6 +118,14 @@ function sheetDb_() {
       LCM_TABLES[name].forEach(function (c, j) { r[c] = values[j]; });
       return merged;
     },
+    // Appends many rows in one write (used when importing a whole mind map at once).
+    insertMany: function (name, list) {
+      if (!list.length) return;
+      var sh = sh_(name), row = sh.getLastRow() + 1, cols = LCM_TABLES[name].length;
+      var values = list.map(function (o) { return toRow(name, o); });
+      sh.getRange(row, 1, values.length, cols).setNumberFormat('@').setValues(values);
+      if (cache[name]) values.forEach(function (v, i) { var o = { _row: row + i }; LCM_TABLES[name].forEach(function (c, j) { o[c] = v[j]; }); cache[name].push(o); });
+    },
     remove: function (name, id) {
       var r = rows(name).filter(function (x) { return x.id === id; })[0];
       if (r) sh_(name).deleteRow(r._row);
@@ -234,6 +242,8 @@ var LCM_TABLES = {
   DailyLogs: ['id', 'date', 'author', 'summary', 'hours', 'blockers', 'createdAt'],
   Activity: ['id', 'actor', 'action', 'detail', 'taskId', 'createdAt'],
   Attendance: ['id', 'date', 'email', 'checkIn', 'checkOut', 'note', 'report', 'reportUrl', 'editedBy', 'createdAt'],
+  // Private "My Mind" space: notes (kind=note) and mind-tree items (kind=node), one row each.
+  Mind: ['id', 'owner', 'kind', 'parentId', 'title', 'body', 'status', 'links', 'tags', 'order', 'collapsed', 'createdAt', 'updatedAt'],
   Sessions: ['id', 'email', 'expiresAt', 'createdAt']
 };
 
@@ -242,6 +252,8 @@ var LCM_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 // Office time zone for attendance dates and admin corrections (India Standard Time, no DST).
 var LCM_TIMEZONE = 'Asia/Kolkata';
 var LCM_TZ_OFFSET = '+05:30';
+// Only these accounts get the private "My Mind" section. Their data is visible to nobody else, admins included.
+var LCM_MIND_OWNERS = ['wesleyj84660@gmail.com'];
 
 function LCMCore(db, svc) {
   var OTP_TTL_SEC = 600;
@@ -362,6 +374,7 @@ function LCMCore(db, svc) {
       serverNow: now(),
       officeDate: officeDate(),
       timezone: LCM_TIMEZONE,
+      features: { mind: hasMind(user) },
       activity: (db.tail ? db.tail('Activity', 400) : db.all('Activity').slice(-400)).filter(function (a) {
         return user.role === 'admin' || lc(a.actor) === lc(user.email) || ids[a.taskId];
       }).slice(-300),
@@ -613,11 +626,44 @@ function LCMCore(db, svc) {
     return publicUser(nu);
   }
 
+  // ---------- My Mind (private notes + mind tree) ----------
+  var MIND_FIELDS = ['kind', 'parentId', 'title', 'body', 'status', 'links', 'tags', 'order', 'collapsed'];
+  function hasMind(user) { return (svc.mindOwners || LCM_MIND_OWNERS).map(lc).indexOf(lc(user.email)) >= 0; }
+  function requireMind(user) { if (!hasMind(user)) throw err('Not available for this account', 403); }
+  function mindLoad(user) {
+    requireMind(user);
+    return { items: db.all('Mind').filter(function (r) { return lc(r.owner) === lc(user.email); }), serverNow: now() };
+  }
+  // Batch save: { upserts: [item...], deletes: [id...] }. Only touches the caller's own rows.
+  function mindSync(user, p) {
+    requireMind(user);
+    var mine = {};
+    db.all('Mind').forEach(function (r) { if (lc(r.owner) === lc(user.email)) mine[r.id] = r; else mine[r.id] = false; });
+    var fresh = [], saved = 0;
+    (Array.isArray(p.upserts) ? p.upserts : []).slice(0, 500).forEach(function (it) {
+      var id = str(it.id, 64);
+      if (!id || mine[id] === false) return; // never overwrite someone else's row
+      var row = { kind: it.kind === 'note' ? 'note' : 'node', parentId: str(it.parentId, 64), title: str(it.title, 300),
+        body: str(it.body, 45000), status: str(it.status, 20), links: str(it.links, 4000), tags: str(it.tags, 500),
+        order: num(it.order, 0), collapsed: bool(it.collapsed) ? 'true' : '', updatedAt: now() };
+      if (mine[id]) { db.update('Mind', id, row); }
+      else { row.id = id; row.owner = lc(user.email); row.createdAt = now(); fresh.push(row); mine[id] = row; }
+      saved++;
+    });
+    if (fresh.length) { if (db.insertMany) db.insertMany('Mind', fresh); else fresh.forEach(function (r) { db.insert('Mind', r); }); }
+    var removed = 0;
+    (Array.isArray(p.deletes) ? p.deletes : []).slice(0, 500).forEach(function (id) {
+      if (mine[id]) { db.remove('Mind', id); removed++; }
+    });
+    return { saved: saved, removed: removed, serverNow: now() };
+  }
+
   var authed = {
     bootstrap: bootstrap, logout: logout, createTask: createTask, updateTask: updateTask, deleteTask: deleteTask,
     addRemark: addRemark, createProposal: createProposal, reviewProposal: reviewProposal,
     uploadFile: uploadFile, addDailyLog: addDailyLog, saveUser: saveUser,
-    checkIn: checkIn, checkOut: checkOut, saveAttendance: saveAttendance, deleteAttendance: deleteAttendance
+    checkIn: checkIn, checkOut: checkOut, saveAttendance: saveAttendance, deleteAttendance: deleteAttendance,
+    mindLoad: mindLoad, mindSync: mindSync
   };
 
   return {
@@ -631,7 +677,7 @@ function LCMCore(db, svc) {
       var user = auth(token);
       var result = fn(user, payload, token);
       // Changes return the fresh dashboard data in the same reply, saving a second round trip.
-      if (action === 'bootstrap' || action === 'logout' || action === 'uploadFile') return result;
+      if (action === 'bootstrap' || action === 'logout' || action === 'uploadFile' || action.indexOf('mind') === 0) return result;
       return { result: result, state: bootstrap(user) };
     }
   };

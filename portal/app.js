@@ -84,6 +84,7 @@
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
     refresh: '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
     alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>',
+    mind: '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
   };
@@ -142,6 +143,8 @@
     S.data = normalize(d);
     try { localStorage.setItem('lcm_cache', JSON.stringify({ token: S.token, data: d })); } catch (e) {}
     // Don't redraw under someone who is typing in the dashboard; redraw when they finish.
+    // My Mind keeps its own data; a background refresh must not redraw it mid-edit.
+    if (S.view === 'mind' && $('#content')) { S.dirty = false; return; }
     if (!$('#content') || !isTyping()) render(); else S.dirty = true;
   }
   function isTyping() {
@@ -192,7 +195,7 @@
       remove: function (t, i) { mem[t] = mem[t].filter(function (x) { return x.id !== i; }); save(); }
     };
     var svc = {
-      adminEmails: ['admin@lcmev.com'], exposeOtp: true,
+      adminEmails: ['admin@lcmev.com'], exposeOtp: true, mindOwners: ['wesleyj84660@gmail.com', 'admin@lcmev.com'],
       now: function () { return new Date().toISOString(); }, uuid: id, random: Math.random, hash: hash,
       officeDate: function () { return officeDay(new Date()); },
       formatTime: function (iso) { return fmtTime(iso); },
@@ -341,6 +344,7 @@
     return [
       ['overview', 'Overview', 'overview'],
       ['tasks', a ? 'All Tasks' : 'My Tasks', 'tasks'],
+      S.data.features && S.data.features.mind ? ['mind', 'My Mind', 'mind'] : null,
       ['attendance', 'Attendance', 'clock'],
       ['daily', 'Daily Works', 'daily'],
       ['approvals', a ? 'Approvals' : 'Method Changes', 'approvals', a ? pending : 0],
@@ -349,12 +353,13 @@
       ['activity', 'Activity', 'activity']
     ].filter(Boolean);
   }
-  var TITLES = { attendance: 'Attendance', overview: 'Overview', tasks: 'Tasks', daily: 'Daily Works', approvals: 'Approvals', team: 'Team', files: 'Files', activity: 'Activity' };
+  var TITLES = { mind: 'My Mind', attendance: 'Attendance', overview: 'Overview', tasks: 'Tasks', daily: 'Daily Works', approvals: 'Approvals', team: 'Team', files: 'Files', activity: 'Activity' };
 
   function render() {
     if (!S.token) return renderLogin();
     if (!S.data) { $('#app').innerHTML = '<div class="boot">Loading your workspace…</div>'; return; }
     if (S.view === 'team' && !isAdmin()) S.view = 'overview';
+    if (S.view === 'mind' && !(S.data.features && S.data.features.mind)) S.view = 'overview';
     var me = S.data.me;
     var html = (PREVIEW ? previewBanner() : '') + '<div class="shell"><aside class="side" id="side">' +
       '<div class="logo"><img src="' + LOGO + '" alt=""><b>Work Portal</b></div><nav class="nav">' +
@@ -379,7 +384,7 @@
     if ($('#newTaskBtn')) $('#newTaskBtn').onclick = function () { taskForm(); };
     bindAttendanceButtons(document);
     var c = $('#content');
-    ({ attendance: viewAttendance, overview: viewOverview, tasks: viewTasks, daily: viewDaily, approvals: viewApprovals, team: viewTeam, files: viewFiles, activity: viewActivity })[S.view](c);
+    ({ mind: function (el) { if (window.LCMMind) window.LCMMind.view(el, window.LCM); else el.innerHTML = '<div class="card empty">Loading…</div>'; }, attendance: viewAttendance, overview: viewOverview, tasks: viewTasks, daily: viewDaily, approvals: viewApprovals, team: viewTeam, files: viewFiles, activity: viewActivity })[S.view](c);
     if (S.openTask) renderDrawer();
   }
   function closeSide() { var s = $('#side'); if (s) s.classList.remove('open'); var o = $('#sideOverlay'); if (o) o.classList.add('hidden'); }
@@ -1087,6 +1092,10 @@
     c.innerHTML = keys.length ? keys.map(function (k) { return '<div class="card" style="margin-bottom:14px"><h3>' + (k === today() ? 'Today' : new Date(k + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })) + '<span class="spacer"></span><span class="small dim">' + byDay[k].length + ' events</span></h3>' + feed(byDay[k]) + '</div>'; }).join('') : '<div class="card empty">No activity yet</div>';
     bindCommon(c);
   }
+
+  // Helpers shared with add-on modules (portal/mind.js)
+  window.LCM = { api: api, toast: toast, esc: esc, icon: icon, ring: ring, modal: modal, closeModal: closeModal, S: S, render: render,
+    officeDay: officeDay, serverNow: serverNow, API_URL: API_URL };
 
   // ---------- Boot ----------
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modal')) closeModal(); else if (S.openTask) closeDrawer(); } });

@@ -71,6 +71,16 @@ LCM - WORK/
   The report is saved as a Google Doc in `LCM - WORK / <Department> / Daily Reports / <YYYY-MM>/`, together with any attached files.
 - Admins: **Attendance** shows the daily register (entry, exit, hours, report), a monthly grid, CSV export and **Add / fix entry** for anyone who forgot to check in or out.
 
+## My Mind (private — wesleyj84660@gmail.com only)
+
+A personal second brain inside the portal. Only accounts in `LCM_MIND_OWNERS` (in `core.js`) see it. The server blocks everyone else, admins included.
+
+- **Mind Tree**: an outline of work with unlimited sub-tasks. Progress rolls up from sub-tasks. 🔗 links mean "depends on", and each item is shown as **Ready / Doing / Blocked / Done**. Keys: ↑↓ move, Space marks done, Enter adds a sibling, Tab / Shift+Tab indent, F2 renames, Del deletes.
+- **Mind Map**: a visual tree with dependency arrows. Drag to pan, scroll to zoom, double-click a branch to focus on it.
+- **Notes**: Obsidian-style Markdown with `[[wikilinks]]` (with autocomplete), backlinks, `#tags`, `- [ ]` checkboxes and a **Today** daily note.
+- **Graph**: how notes (and the tasks that mention them) link together.
+- It is stored in the `Mind` sheet. On first open it loads a starter plan: 103 linked LCM work items and 9 notes.
+
 ## How it works
 
 **Admin**

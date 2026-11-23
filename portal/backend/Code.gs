@@ -118,6 +118,14 @@ function sheetDb_() {
       LCM_TABLES[name].forEach(function (c, j) { r[c] = values[j]; });
       return merged;
     },
+    // Appends many rows in one write (used when importing a whole mind map at once).
+    insertMany: function (name, list) {
+      if (!list.length) return;
+      var sh = sh_(name), row = sh.getLastRow() + 1, cols = LCM_TABLES[name].length;
+      var values = list.map(function (o) { return toRow(name, o); });
+      sh.getRange(row, 1, values.length, cols).setNumberFormat('@').setValues(values);
+      if (cache[name]) values.forEach(function (v, i) { var o = { _row: row + i }; LCM_TABLES[name].forEach(function (c, j) { o[c] = v[j]; }); cache[name].push(o); });
+    },
     remove: function (name, id) {
       var r = rows(name).filter(function (x) { return x.id === id; })[0];
       if (r) sh_(name).deleteRow(r._row);
