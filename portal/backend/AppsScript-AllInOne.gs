@@ -209,6 +209,7 @@ function services_() {
       file.moveTo(folderPath_(r.path));
       return { id: file.getId(), url: file.getUrl() };
     },
+    trashFile: function (id) { DriveApp.getFileById(id).setTrashed(true); },
     folderUrl: function () { return uploadsFolder_().getUrl(); },
     calendarSync: function (owner, items, deletedIds, all, full) { return mindCalendar_(owner, items, deletedIds, all, full); }
   };
@@ -454,7 +455,7 @@ function LCMCore(db, svc) {
       tasks: tasks,
       remarks: db.all('Remarks').filter(inScope),
       proposals: db.all('Proposals').filter(function (r) { return inScope(r) && mine(r); }),
-      files: db.all('Files').filter(inScope),
+      files: db.all('Files').filter(function (r) { return inScope(r) || lc(r.uploader) === lc(user.email); }),
       dailyLogs: db.all('DailyLogs').filter(mine),
       attendance: db.all('Attendance').filter(function (r) { return user.role === 'admin' || lc(r.email) === lc(user.email); }),
       serverNow: now(),
@@ -606,6 +607,19 @@ function LCMCore(db, svc) {
     db.insert('Files', f);
     log(user.email, 'upload', 'Uploaded ' + name + (t ? ' to "' + t.title + '"' : ''), t ? t.id : '');
     return f;
+  }
+
+  // Uploader can delete their own file; admins can delete any. The Drive file goes to Trash (restorable for 30 days).
+  function deleteFile(user, p) {
+    var f = db.all('Files').filter(function (x) { return x.id === str(p.id, 64); })[0];
+    if (!f) throw err('File not found', 404);
+    if (user.role !== 'admin' && lc(f.uploader) !== lc(user.email)) throw err('Only the person who uploaded this file or an admin can delete it', 403);
+    var trashed = true;
+    if (f.driveId && svc.trashFile) { try { svc.trashFile(f.driveId); } catch (e) { trashed = false; } }
+    db.remove('Files', f.id);
+    var t = f.taskId ? db.all('Tasks').filter(function (x) { return x.id === f.taskId; })[0] : null;
+    log(user.email, 'file_deleted', 'Deleted ' + f.name + (t ? ' from "' + t.title + '"' : ''), f.taskId || '');
+    return { ok: true, trashed: trashed };
   }
 
   // ---------- Attendance (server clock, office time zone) ----------
@@ -770,7 +784,7 @@ function LCMCore(db, svc) {
   var authed = {
     bootstrap: bootstrap, logout: logout, createTask: createTask, updateTask: updateTask, deleteTask: deleteTask,
     addRemark: addRemark, createProposal: createProposal, reviewProposal: reviewProposal,
-    uploadFile: uploadFile, addDailyLog: addDailyLog, saveUser: saveUser,
+    uploadFile: uploadFile, deleteFile: deleteFile, addDailyLog: addDailyLog, saveUser: saveUser,
     checkIn: checkIn, checkOut: checkOut, saveAttendance: saveAttendance, deleteAttendance: deleteAttendance,
     mindLoad: mindLoad, mindSync: mindSync, mindCalSync: mindCalSync
   };

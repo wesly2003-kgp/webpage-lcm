@@ -209,6 +209,7 @@ function services_() {
       file.moveTo(folderPath_(r.path));
       return { id: file.getId(), url: file.getUrl() };
     },
+    trashFile: function (id) { DriveApp.getFileById(id).setTrashed(true); },
     folderUrl: function () { return uploadsFolder_().getUrl(); },
     calendarSync: function (owner, items, deletedIds, all, full) { return mindCalendar_(owner, items, deletedIds, all, full); }
   };

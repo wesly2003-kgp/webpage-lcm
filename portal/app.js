@@ -86,6 +86,7 @@
     alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>',
     mind: '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/>',
     home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
   };
   function icon(n, size) { return '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[n] + '</svg>'; }
@@ -499,7 +500,7 @@
     bindCommon(c);
   }
 
-  var ACT_ICON = { check_in: '🟢', check_out: '🔴', attendance_edit: '🕒', login: '🔑', task_created: '📝', task_assigned: '👤', status: '🔄', remark: '💬', proposal: '💡', proposal_approved: '✅', proposal_rejected: '❌', upload: '📎', daily_log: '🗓️', daily_work: '📌', user_added: '➕', user_updated: '✏️', task_deleted: '🗑️' };
+  var ACT_ICON = { file_deleted: '🗑️', check_in: '🟢', check_out: '🔴', attendance_edit: '🕒', login: '🔑', task_created: '📝', task_assigned: '👤', status: '🔄', remark: '💬', proposal: '💡', proposal_approved: '✅', proposal_rejected: '❌', upload: '📎', daily_log: '🗓️', daily_work: '📌', user_added: '➕', user_updated: '✏️', task_deleted: '🗑️' };
   function feed(items) {
     items = items.filter(function (a) { return a.action !== 'login'; });
     if (!items.length) return '<div class="empty">No activity yet</div>';
@@ -769,9 +770,20 @@
     var dz = $('#dz', d);
     if (dz) setupDropzone(dz, $('#fileIn', d), $('#upStatus', d), t.id);
   }
+  function canDeleteFile(f) { return isAdmin() || f.uploader === S.data.me.email; }
+  function delFileBtn(f) { return canDeleteFile(f) ? '<button class="btn ghost sm del-file" data-delfile="' + esc(f.id) + '" title="Delete file">' + icon('trash', 15) + '</button>' : ''; }
+  // One handler for every delete-file button (task drawer + Files page)
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-delfile]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var f = S.data.files.filter(function (x) { return x.id === b.dataset.delfile; })[0]; if (!f) return;
+    if (!confirm('Delete "' + f.name + '"?' + (f.driveId && f.driveId !== 'preview' ? '\n\nIt moves to Google Drive Trash and can be restored from there for 30 days.' : ''))) return;
+    b.disabled = true;
+    act('deleteFile', { id: f.id }, 'Deleted ' + f.name).catch(function () { b.disabled = false; });
+  }, true);
   function fileRow(f) {
     return '<div class="file-row">' + icon('files', 18) + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name) + ' <span class="tag">preview — not on Drive</span>') + '</div>' +
-      '<div class="small dim">' + fmtSize(f.size) + ' · ' + esc(nameOf(f.uploader)) + ' · ' + ago(f.createdAt) + (f.folder ? ' · 📁 ' + esc(f.folder) : '') + '</div></div></div>';
+      '<div class="small dim">' + fmtSize(f.size) + ' · ' + esc(nameOf(f.uploader)) + ' · ' + ago(f.createdAt) + (f.folder ? ' · 📁 ' + esc(f.folder) : '') + '</div></div>' + delFileBtn(f) + '</div>';
   }
   function setupDropzone(dz, input, status, taskId) {
     dz.onclick = function () { input.click(); };
@@ -904,10 +916,10 @@
       '<div class="dropzone" id="dz">' + icon('upload', 26) + '<div style="margin-top:8px"><b>Drop files here</b> or click to choose</div><div class="small dim">Saved to LCM - WORK / Department / Task · max 25 MB</div><input type="file" id="fileIn" multiple hidden></div><div id="upStatus" class="small muted" style="margin-top:8px"></div></div>' +
       '<div class="card"><h3>Storage</h3><div class="kpi" style="--accent:#0077ff;border:0;padding:0 0 0 14px;margin-bottom:12px"><div class="label">Files uploaded</div><div class="value">' + files.length + '</div><div class="sub">' + fmtSize(files.reduce(function (s, f) { return s + (+f.size || 0); }, 0)) + ' total</div></div>' +
       (d.uploadsFolderUrl ? '<a class="btn sm" href="' + esc(d.uploadsFolderUrl) + '" target="_blank" rel="noopener">' + icon('files', 15) + ' Open Drive folder</a>' : '<p class="small muted">' + (PREVIEW ? 'In preview mode files are not sent to Drive.' : 'Uploads go to the LCM - WORK Drive folder, sorted into department sub-folders.') + '</p>') + '</div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>File</th><th>Task</th><th>Drive folder</th><th>Uploaded by</th><th>Size</th><th>When</th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table><thead><tr><th>File</th><th>Task</th><th>Drive folder</th><th>Uploaded by</th><th>Size</th><th>When</th><th></th></tr></thead><tbody>' +
       (files.length ? files.map(function (f) {
-        return '<tr><td>' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name)) + '</td><td>' + (f.taskId ? '<a href="#" data-task="' + esc(f.taskId) + '">' + esc(taskName(f.taskId)) + '</a>' : '<span class="dim">General</span>') + '</td><td class="small dim">' + esc(f.folder || '—') + '</td><td><span class="row">' + avatar(f.uploader, true) + '<span class="small">' + esc(nameOf(f.uploader)) + '</span></span></td><td class="small dim">' + fmtSize(f.size) + '</td><td class="small dim nowrap">' + ago(f.createdAt) + '</td></tr>';
-      }).join('') : '<tr><td colspan="6" class="empty">No files yet</td></tr>') + '</tbody></table></div>';
+        return '<tr><td>' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>' : esc(f.name)) + '</td><td>' + (f.taskId ? '<a href="#" data-task="' + esc(f.taskId) + '">' + esc(taskName(f.taskId)) + '</a>' : '<span class="dim">General</span>') + '</td><td class="small dim">' + esc(f.folder || '—') + '</td><td><span class="row">' + avatar(f.uploader, true) + '<span class="small">' + esc(nameOf(f.uploader)) + '</span></span></td><td class="small dim">' + fmtSize(f.size) + '</td><td class="small dim nowrap">' + ago(f.createdAt) + '</td><td>' + delFileBtn(f) + '</td></tr>';
+      }).join('') : '<tr><td colspan="7" class="empty">No files yet</td></tr>') + '</tbody></table></div>';
     bindCommon(c);
     var dz = $('#dz'); var sel = $('#upTask');
     setupDropzone(dz, $('#fileIn'), $('#upStatus'), function () { return sel.value; });
