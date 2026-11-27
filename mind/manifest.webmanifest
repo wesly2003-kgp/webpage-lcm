@@ -1,0 +1,24 @@
+{
+  "id": "/mind/",
+  "name": "My Mind — LCM",
+  "short_name": "My Mind",
+  "description": "Private planning space: mind map, task tree, board, timeline, calendar and linked notes. Syncs with lcmev.com.",
+  "start_url": "/mind/?source=app",
+  "scope": "/mind/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": ["productivity", "business"],
+  "icons": [
+    { "src": "/mind/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/mind/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/mind/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Mind Map", "url": "/mind/#map", "icons": [{ "src": "/mind/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Calendar", "url": "/mind/#calendar", "icons": [{ "src": "/mind/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Notes", "url": "/mind/#notes", "icons": [{ "src": "/mind/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

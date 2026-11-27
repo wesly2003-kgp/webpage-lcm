@@ -89,6 +89,14 @@ The same tasks appear in every view, so a change made anywhere shows everywhere:
 - **Undo / Redo**: Ctrl+Z / Ctrl+Y.
 - **Notes**: Obsidian-style `[[links]]`, backlinks, tags and daily notes, plus a **Graph** view.
 
+### My Mind app (install on your computer or phone)
+Open **https://lcmev.com/mind/** and sign in with wesleyj84660@gmail.com.
+- **Windows / Mac (Chrome or Edge):** click the install icon (⊕ / 🖥 with an arrow) at the right of the address bar, or the **⬇ Install app** button in the app header → **Install**. My Mind then opens in its own window and appears in the Start menu / Launchpad; right-click its taskbar icon → **Pin to taskbar**.
+- **Android (Chrome):** ⋮ menu → **Install app**.
+- **iPhone / iPad (Safari):** Share → **Add to Home Screen**.
+
+The app uses the same data as the website, works offline (changes sync when you reconnect), and updates itself whenever the website is updated. Right-click the app icon for shortcuts to Map, Calendar and Notes.
+
 ### Google Calendar
 Every task with a deadline or a repeat becomes an all-day event (repeating tasks become repeating events).
 Done tasks get a ✓, and deleted tasks or cleared deadlines remove their event.

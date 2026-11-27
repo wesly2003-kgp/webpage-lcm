@@ -140,20 +140,47 @@
   function load() {
     if (M.loading) return; M.loading = true; M.error = '';
     L.api('mindLoad').then(function (r) {
-      M.mode = 'remote'; setAll(r.items || []);
+      M.mode = 'remote'; M.offline = false; setAll(r.items || []);
       var local = readLocal();
       if (!r.items.length && local.length) { setAll(local); markAll(); flush(); }
+      if (applyPending()) flush();
     }).catch(function (e) {
       if (/Unknown action/i.test(e.message)) { M.mode = 'local'; setAll(readLocal()); }
+      else if (/reach the server|Failed to fetch|NetworkError/i.test(e.message) && readStore().items) {
+        // Offline: open the last synced copy; edits queue up and sync when the connection returns
+        M.mode = 'remote'; M.offline = true; setAll(readStore().items); applyPending();
+      }
       else M.error = e.message;
-    }).then(function () { purgeStarter(); M.loaded = true; M.loading = false; draw(); if (M.mode === 'remote') setTimeout(function () { calSync(true); }, 1500); });
+    }).then(function () {
+      purgeStarter(); M.loaded = true; M.loading = false; saveStore(); draw();
+      if (M.mode === 'remote' && !M.offline) setTimeout(function () { calSync(true); }, 1500);
+    });
   }
+  // ---------- offline copy (per user, this device) ----------
+  function storeKey() { return 'lcm_mind_store_' + L.S.data.me.email; }
+  function readStore() { try { return JSON.parse(localStorage.getItem(storeKey()) || '{}'); } catch (e) { return {}; } }
+  function saveStore() {
+    if (M.mode !== 'remote') return;
+    try { localStorage.setItem(storeKey(), JSON.stringify({ items: list().map(serial), pending: { dirty: Object.keys(M.dirty), deleted: Object.keys(M.deleted) }, at: new Date().toISOString() })); } catch (e) {}
+  }
+  // Re-apply edits that were made offline (or not yet saved when the app closed)
+  function applyPending() {
+    var st = readStore(), p = st.pending || {}, byId = {}, n = 0;
+    (st.items || []).forEach(function (x) { byId[x.id] = x; });
+    (p.dirty || []).forEach(function (id) { if (byId[id]) { var o = byId[id]; delete o.m; M.items[id] = o; meta(o); M.dirty[id] = 1; n++; } });
+    (p.deleted || []).forEach(function (id) { if (M.items[id]) delete M.items[id]; M.deleted[id] = 1; n++; });
+    return n;
+  }
+  window.addEventListener('online', function () {
+    if (!L || !M.loaded) return;
+    flush().then(function () { if (M.offline) { M.offline = false; M.loaded = false; if (root && document.body.contains(root)) view(root, L); } });
+  });
   function setAll(arr) { M.items = {}; arr.forEach(function (x) { delete x.m; M.items[x.id] = x; meta(x); }); }
   function readLocal() { try { return JSON.parse(localStorage.getItem(localKey()) || '[]'); } catch (e) { return []; } }
   function markAll() { Object.keys(M.items).forEach(function (k) { M.dirty[k] = 1; }); }
   function touch(id) { var n = M.items[id]; if (!n) return; n.updatedAt = new Date().toISOString(); M.dirty[id] = 1; schedule(); }
   function remove(id) { delete M.items[id]; delete M.dirty[id]; M.deleted[id] = 1; schedule(); }
-  function schedule() { M.status = 'Saving soon…'; setStatus(); clearTimeout(M.saveTimer); M.saveTimer = setTimeout(flush, 800); }
+  function schedule() { M.status = M.offline || !navigator.onLine ? 'Offline — will sync' : 'Saving soon…'; setStatus(); clearTimeout(M.saveTimer); M.saveTimer = setTimeout(flush, 800); clearTimeout(M.storeTimer); M.storeTimer = setTimeout(saveStore, 300); }
   function serial(n) { var o = {}; Object.keys(n).forEach(function (k) { if (k !== 'm') o[k] = n[k]; }); var s = JSON.stringify(n.m || {}); o.meta = s === '{}' ? '' : s; return o; }
   function flush() {
     var ups = Object.keys(M.dirty).map(function (k) { return M.items[k]; }).filter(Boolean).map(serial), dels = Object.keys(M.deleted);
@@ -165,11 +192,12 @@
     if (M.saving) { schedule(); return Promise.resolve(); }
     M.saving = true; M.dirty = {}; M.deleted = {}; M.status = 'Saving…'; setStatus();
     return L.api('mindSync', { upserts: ups, deletes: dels }).then(function (r) {
-      M.saving = false; M.status = 'Saved ✓'; setStatus(); try { localStorage.removeItem(localKey()); } catch (e) {}
+      M.saving = false; M.offline = false; M.status = 'Saved ✓'; setStatus(); try { localStorage.removeItem(localKey()); } catch (e) {} saveStore();
       calStatus(r && r.calendar);
     }).catch(function (e) {
       M.saving = false; ups.forEach(function (u) { if (M.items[u.id]) M.dirty[u.id] = 1; }); dels.forEach(function (d) { M.deleted[d] = 1; });
-      M.status = 'Not saved — retrying'; setStatus(); L.toast('My Mind: ' + e.message, 'err');
+      var net = /reach the server|Failed to fetch|NetworkError/i.test(e.message); saveStore();
+      M.status = net ? 'Offline — will sync' : 'Not saved — retrying'; setStatus(); if (!net) L.toast('My Mind: ' + e.message, 'err');
       clearTimeout(M.saveTimer); M.saveTimer = setTimeout(flush, 5000);
     });
   }
@@ -366,6 +394,7 @@
   var root;
   function view(c, app) {
     L = app; root = c;
+    var h = (location.hash || '').slice(1); if (h && VIEWS.some(function (v) { return v[0] === h; })) { M.tab = h; history.replaceState(null, '', location.pathname + location.search); }
     if (!M.loaded) { c.innerHTML = '<div class="card empty">Opening your mind…</div>'; load(); return; }
     draw();
   }
@@ -377,10 +406,11 @@
     if (M.error) { root.innerHTML = '<div class="card empty">Could not load My Mind: ' + esc(M.error) + '<br><br><button class="btn sm" id="mRetry">Retry</button></div>'; $('#mRetry').onclick = function () { M.loaded = false; M.error = ''; view(root, L); }; return; }
     compute(); savePrefs();
     var isTask = TASKVIEWS.indexOf(M.tab) >= 0;
-    var html = (M.mode === 'local' ? '<div class="alert amber">Saved on this device only — update the Apps Script backend to sync My Mind to Google Sheets (it uploads automatically once updated).</div>' : '') +
+    var html = (M.offline ? '<div class="alert amber">Offline — showing your last synced copy. Changes are kept on this device and sync automatically when you reconnect.</div>' : '') + (M.mode === 'local' ? '<div class="alert amber">Saved on this device only — update the Apps Script backend to sync My Mind to Google Sheets (it uploads automatically once updated).</div>' : '') +
       '<div class="toolbar mind-top"><div class="seg">' + VIEWS.map(function (t) { return '<button data-mtab="' + t[0] + '" class="' + (M.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>' +
       '<span class="spacer"></span><button class="btn ghost sm" id="mUndo" title="Undo (Ctrl+Z)"' + (M.undo.length ? '' : ' disabled') + '>↶ Undo</button><button class="btn ghost sm" id="mRedo" title="Redo (Ctrl+Y)"' + (M.redo.length ? '' : ' disabled') + '>↷</button>' +
       '<span class="small dim nowrap" id="mindStatus">' + esc(M.status || (M.mode === 'local' ? 'Saved on this device' : 'All changes saved')) + '</span>' +
+      (L.APP === 'mind' ? '' : '<a class="btn sm" href="/mind/" target="_blank" rel="noopener" title="Open My Mind as its own app (installable)">📲 Get the app</a>') +
       '<button class="btn sm" id="mManage">⚙ Manage</button>' + calTag() + '<span class="tag hide-sm">🔒 Private</span></div>';
     if (isTask) html += filterBar();
     html += '<div id="mindBody"></div>';
@@ -1497,6 +1527,14 @@
     if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (ctrl && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (e.key === 'Escape' && Object.keys(M.multi).length) { M.multi = {}; draw(); }
+  });
+
+  // App shortcuts (/mind/#map, #calendar, #notes …) also work while the app is already open
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').slice(1);
+    if (!h || !VIEWS.some(function (v) { return v[0] === h; })) return;
+    M.tab = h; history.replaceState(null, '', location.pathname + location.search);
+    if (M.loaded && root && document.body.contains(root)) draw();
   });
 
   window.LCMMind = { view: view, flush: flush, isBusy: function () { return Object.keys(M.dirty).length > 0; } };

@@ -5,6 +5,8 @@
   var CFG = window.LCM_CONFIG || {};
   var API_URL = (CFG.API_URL || '').trim();
   var PREVIEW = !API_URL;
+  // 'mind' when running as the installable My Mind app (/mind/); '' for the full work portal
+  var APP = window.LCM_APP_MODE || '';
   var LOGO = '/assets/img/logo-uNv_1gp3.png';
   var STATUS_COLORS = { 'Not Started': '#8b93a7', 'In Progress': '#0077ff', 'Blocked': '#ef4444', 'In Review': '#f5a524', 'Completed': '#22c55e' };
   var PRIO_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
@@ -267,7 +269,7 @@
   function renderLogin() {
     var L = S.login;
     var html = '<div class="login-wrap"><div class="login-card">' +
-      '<div class="brand"><img src="' + LOGO + '" alt="LCM"><div><b style="font-family:Montserrat">LCM Work Portal</b><div class="small muted">Loop Charging Module</div></div></div>';
+      '<div class="brand"><img src="' + LOGO + '" alt="LCM"><div><b style="font-family:Montserrat">' + (APP === 'mind' ? 'My Mind' : 'LCM Work Portal') + '</b><div class="small muted">' + (APP === 'mind' ? 'Private planning space · LCM' : 'Loop Charging Module') + '</div></div></div>';
     if (L.step === 'email') {
       html += '<h1>Sign in</h1><p class="muted small" style="margin:0">We\'ll email you a one-time 6-digit code. No password needed.</p>' +
         '<div class="role-switch"><button data-role="employee" class="' + (L.role === 'employee' ? 'on' : '') + '">Employee</button><button data-role="admin" class="' + (L.role === 'admin' ? 'on' : '') + '">Admin</button></div>' +
@@ -281,7 +283,7 @@
         '<div class="row" style="margin-top:14px;justify-content:space-between"><button class="btn ghost sm" id="changeEmail">← Change email</button><button class="btn ghost sm" id="resend">Resend code</button></div>' +
         (L.previewCode ? '<div class="preview-code">Preview mode code: <b style="letter-spacing:3px">' + esc(L.previewCode) + '</b></div>' : '');
     }
-    html += '<a class="back-link" href="/">← Back to lcmev.com</a></div></div>';
+    html += (APP === 'mind' ? '<a class="back-link" href="/portal/">Open the work portal →</a>' : '<a class="back-link" href="/">← Back to lcmev.com</a>') + '</div></div>';
     $('#app').innerHTML = (PREVIEW ? previewBanner() : '') + html;
 
     $$('.role-switch button').forEach(function (b) { b.onclick = function () { L.role = b.dataset.role; renderLogin(); }; });
@@ -365,6 +367,7 @@
   function render() {
     if (!S.token) return renderLogin();
     if (!S.data) { $('#app').innerHTML = '<div class="boot">Loading your workspace…</div>'; return; }
+    if (APP === 'mind') return renderMindApp();
     if (S.view === 'team' && !isAdmin()) S.view = 'overview';
     if (S.view === 'mind' && !hasMind()) S.view = 'overview';
     var me = S.data.me;
@@ -394,6 +397,35 @@
     ({ mind: function (el) { if (window.LCMMind) window.LCMMind.view(el, window.LCM); else el.innerHTML = '<div class="card empty">Loading…</div>'; }, attendance: viewAttendance, overview: viewOverview, tasks: viewTasks, daily: viewDaily, approvals: viewApprovals, team: viewTeam, files: viewFiles, activity: viewActivity })[S.view](c);
     if (S.openTask) renderDrawer();
   }
+  // ---------- Installable "My Mind" app shell ----------
+  var installEvt = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; var b = $('#installBtn'); if (b) b.classList.remove('hidden'); });
+  window.addEventListener('appinstalled', function () { installEvt = null; var b = $('#installBtn'); if (b) b.classList.add('hidden'); toast('My Mind is installed — find it in your Start menu / home screen', 'ok'); });
+  function installApp() {
+    if (installEvt) { installEvt.prompt(); installEvt.userChoice.then(function () { installEvt = null; var b = $('#installBtn'); if (b) b.classList.add('hidden'); }); return; }
+    toast('Use your browser menu: Chrome/Edge → "Install My Mind" (⊕ in the address bar); iPhone Safari → Share → Add to Home Screen', 'ok');
+  }
+  function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
+  function renderMindApp() {
+    S.view = 'mind';
+    var me = S.data.me;
+    var head = (PREVIEW ? previewBanner() : '') + '<div class="mind-app"><header class="mind-app-top"><img src="/mind/icon-192.png" alt=""><b>My Mind</b>' +
+      '<span class="spacer"></span><span class="small dim hide-sm" id="netState"></span>' +
+      '<button class="btn primary sm' + (installEvt && !isStandalone() ? '' : ' hidden') + '" id="installBtn">⬇ Install app</button>' +
+      '<a class="btn ghost sm hide-sm" href="/portal/" target="' + (isStandalone() ? '_blank' : '_self') + '">Work portal ↗</a>' +
+      avatar(me.email, true) + '<button class="btn ghost sm" id="logout" title="Sign out">' + icon('logout', 16) + '</button></header>';
+    if (!hasMind()) {
+      $('#app').innerHTML = head + '<main class="content"><div class="card empty">My Mind is private to its owner. This account (' + esc(me.email) + ') doesn\'t have access.</div></main></div>';
+    } else {
+      $('#app').innerHTML = head + '<main class="content mind-app-content" id="content"></main></div>';
+      if (window.LCMMind) window.LCMMind.view($('#content'), window.LCM);
+    }
+    $('#logout').onclick = function () { signOut(); };
+    $('#installBtn').onclick = installApp;
+    netState();
+  }
+  function netState() { var el = $('#netState'); if (el) el.textContent = navigator.onLine ? '' : '● Offline — changes sync when you reconnect'; }
+  window.addEventListener('online', netState); window.addEventListener('offline', netState);
   function closeSide() { var s = $('#side'); if (s) s.classList.remove('open'); var o = $('#sideOverlay'); if (o) o.classList.add('hidden'); }
 
   // ---------- Charts (SVG) ----------
@@ -1113,7 +1145,7 @@
 
   // Helpers shared with add-on modules (portal/mind.js)
   window.LCM = { api: api, toast: toast, esc: esc, icon: icon, ring: ring, modal: modal, closeModal: closeModal, S: S, render: render,
-    officeDay: officeDay, serverNow: serverNow, API_URL: API_URL };
+    officeDay: officeDay, serverNow: serverNow, API_URL: API_URL, APP: APP, installApp: installApp, isStandalone: isStandalone };
 
   // ---------- Boot ----------
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modal')) closeModal(); else if (S.openTask) closeDrawer(); } });
